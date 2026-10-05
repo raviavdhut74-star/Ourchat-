@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Our Chat ❤️</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Arial, sans-serif; background: #f7f7f7; }
+  .header { background: #ff4f81; color: white; padding: 18px; text-align: center; font-size: 21px; font-weight: bold; }
+  .chat { height: calc(100dvh - 130px); padding: 15px; overflow-y: auto; }
+  .message { max-width: 75%; padding: 11px 15px; margin: 10px 0; border-radius: 18px; font-size: 16px; word-wrap: break-word; }
+  .received { background: white; border: 1px solid #eee; margin-right: auto; }
+  .sent { background: #ff4f81; color: white; margin-left: auto; }
+  .who { font-size: 12px; opacity: .7; margin-bottom: 3px; }
+  .input-area { position: fixed; bottom: 0; left: 0; right: 0; display: flex; padding: 10px; background: white; border-top: 1px solid #ddd; }
+  #messageInput { flex: 1; padding: 13px; border: 1px solid #ddd; border-radius: 25px; outline: none; font-size: 16px; }
+  button { margin-left: 8px; width: 70px; border: none; border-radius: 25px; background: #ff4f81; color: white; font-weight: bold; }
+  #status { text-align: center; color: #999; font-size: 14px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<div class="header">❤️ Our Chat</div>
+<div class="chat" id="chat"><div id="status">Connecting...</div></div>
+
+<div class="input-area">
+  <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off">
+  <button id="sendBtn">Send</button>
+</div>
+
+<script>
+window.addEventListener("error", function (e) {
+  var s = document.getElementById("status");
+  if (s) s.textContent = "Error: " + e.message;
+});
+window.addEventListener("unhandledrejection", function (e) {
+  var s = document.getElementById("status");
+  if (s) s.textContent = "Error: " + (e.reason && (e.reason.code || e.reason.message));
+});
+</script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { initializeAuth, inMemoryPersistence, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCuUiyx0uiiei3BsPx_DuvCWsewW4z3umw",
+  authDomain: "ourchat-9931c.firebaseapp.com",
+  projectId: "ourchat-9931c",
+  storageBucket: "ourchat-9931c.firebasestorage.app",
+  messagingSenderId: "234906945730",
+  appId: "1:234906945730:web:c6093ff45cd2d694c9535b",
+  measurementId: "G-BZHHQ4F5WQ"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = initializeAuth(app, { persistence: inMemoryPersistence });
+const db = getFirestore(app);
+
+const chat = document.getElementById("chat");
+const input = document.getElementById("messageInput");
+const status = document.getElementById("status");
+
+let myName = null;
+try { myName = localStorage.getItem("ourchat_name"); } catch (e) {}
+if (!myName) {
+  try { myName = (prompt("तुमचे नाव काय?") || "").trim(); } catch (e) {}
+  if (!myName) myName = "Me";
+  try { localStorage.setItem("ourchat_name", myName); } catch (e) {}
+}
+
+let myUid = null;
+let started = false;
+
+onAuthStateChanged(auth, (user) => {
+  if (!user) return;
+  myUid = user.uid;
+  if (!started) { started = true; listen(); }
+});
+
+signInAnonymously(auth).catch((e) => {
+  status.textContent = "Login error: " + e.code;
+});
+
+function listen() {
+  const q = query(collection(db, "messages"), orderBy("createdAt"), limit(200));
+  onSnapshot(q, (snap) => {
+    chat.innerHTML = "";
+    if (snap.empty) {
+      chat.innerHTML = '<div id="status">No messages yet. Say hi ❤️</div>';
+    }
+    snap.forEach((d) => {
+      const m = d.data();
+      const el = document.createElement("div");
+      el.className = "message " + (m.uid === myUid ? "sent" : "received");
+      const who = document.createElement("div");
+      who.className = "who";
+      who.textContent = m.name || "";
+      const txt = document.createElement("div");
+      txt.textContent = m.text;
+      el.appendChild(who);
+      el.appendChild(txt);
+      chat.appendChild(el);
+    });
+    chat.scrollTop = chat.scrollHeight;
+  }, (e) => {
+    chat.innerHTML = '<div id="status">Error: ' + e.code + '</div>';
+  });
+}
+
+async function sendMessage() {
+  const text = input.value.trim();
+  if (!text || !myUid) return;
+  input.value = "";
+  try {
+    await addDoc(collection(db, "messages"), {
+      text, name: myName, uid: myUid, createdAt: serverTimestamp()
+    });
+  } catch (e) {
+    alert("Send failed: " + e.code);
+    input.value = text;
+  }
+}
+
+document.getElementById("sendBtn").addEventListener("click", sendMessage);
+input.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+</script>
+</body>
+</html>
