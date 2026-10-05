@@ -1,285 +1,517 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Our Chat ❤️</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: Arial, sans-serif; background: #f7f7f7; }
-  .header { background: #ff4f81; color: white; padding: 18px; text-align: center; font-size: 21px; font-weight: bold; }
-  .chat { height: calc(100dvh - 130px); padding: 15px; overflow-y: auto; }
-  .message { max-width: 75%; padding: 11px 15px; margin: 10px 0; border-radius: 18px; font-size: 16px; word-wrap: break-word; }
-  .received { background: white; border: 1px solid #eee; margin-right: auto; }
-  .sent { background: #ff4f81; color: white; margin-left: auto; }
-  .who { font-size: 12px; opacity: .7; margin-bottom: 3px; }
-  .input-area { position: fixed; bottom: 0; left: 0; right: 0; display: flex; padding: 10px; background: white; border-top: 1px solid #ddd; }
-  #messageInput { flex: 1; padding: 13px; border: 1px solid #ddd; border-radius: 25px; outline: none; font-size: 16px; }
-  button { margin-left: 8px; width: 70px; border: none; border-radius: 25px; background: #ff4f81; color: white; font-weight: bold; }
-  #status { text-align: center; color: #999; font-size: 14px; margin-top: 20px; }
-</style>
+  <title>Our Chat ❤️</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+    }
+
+    .header {
+      background: #ff4f81;
+      color: white;
+      text-align: center;
+      padding: 15px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    #deleteAllBtn {
+      margin-top: 8px;
+      padding: 7px 12px;
+      border: none;
+      border-radius: 20px;
+      background: white;
+      color: #ff4f81;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .chat {
+      height: calc(100dvh - 150px);
+      overflow-y: auto;
+      padding: 15px;
+      padding-bottom: 80px;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 10px 0;
+    }
+
+    .my-row {
+      justify-content: flex-end;
+    }
+
+    .message {
+      max-width: 75%;
+      padding: 11px 15px;
+      border-radius: 18px;
+      background: white;
+      border: 1px solid #eee;
+      word-wrap: break-word;
+    }
+
+    .my-message {
+      background: #ff4f81;
+      color: white;
+    }
+
+    .name {
+      font-size: 12px;
+      opacity: 0.7;
+      margin-bottom: 4px;
+    }
+
+    .deleteBtn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: white;
+      color: red;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .inputArea {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      gap: 8px;
+      padding: 10px;
+      background: white;
+      border-top: 1px solid #ddd;
+    }
+
+    #messageInput {
+      flex: 1;
+      padding: 13px;
+      border: 1px solid #ddd;
+      border-radius: 25px;
+      font-size: 16px;
+      outline: none;
+    }
+
+    #sendBtn {
+      width: 70px;
+      border: none;
+      border-radius: 25px;
+      background: #ff4f81;
+      color: white;
+      font-weight: bold;
+    }
+
+    #status {
+      text-align: center;
+      color: #999;
+      margin-top: 20px;
+    }
+  </style>
 </head>
+
 <body>
 
-<div class="header">❤️ Our Chat</div>
-<div class="chat" id="chat"><div id="status">Connecting...</div></div>
+  <div class="header">
+    ❤️ Our Chat
+    <br>
 
-<div class="input-area">
-  <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off">
-  <button id="sendBtn">Send</button>
-</div>
+    <button id="deleteAllBtn">
+      🗑️ Delete All
+    </button>
+  </div>
 
-<script>
-window.addEventListener("error", function (e) {
-  var s = document.getElementById("status");
-  if (s) s.textContent = "Error: " + e.message;
-});
-window.addEventListener("unhandledrejection", function (e) {
-  var s = document.getElementById("status");
-  if (s) s.textContent = "Error: " + (e.reason && (e.reason.code || e.reason.message));
-});
-</script>
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeAuth, inMemoryPersistence, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp }
-  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  <div class="chat" id="chat">
+    <div id="status">Connecting...</div>
+  </div>
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCuUiyx0uiiei3BsPx_DuvCWsewW4z3umw",
-  authDomain: "ourchat-9931c.firebaseapp.com",
-  projectId: "ourchat-9931c",
-  storageBucket: "ourchat-9931c.firebasestorage.app",
-  messagingSenderId: "234906945730",
-  appId: "1:234906945730:web:c6093ff45cd2d694c9535b",
-  measurementId: "G-BZHHQ4F5WQ"
-};
+  <div class="inputArea">
+    <input
+      type="text"
+      id="messageInput"
+      placeholder="Type a message..."
+      autocomplete="off"
+    >
 
-const app = initializeApp(firebaseConfig);
-const auth = initializeAuth(app, { persistence: inMemoryPersistence });
-const db = getFirestore(app);
+    <button id="sendBtn">Send</button>
+  </div>
 
-const chat = document.getElementById("chat");
-const input = document.getElementById("messageInput");
-const status = document.getElementById("status");
 
-<!DOCTYPE html>
-<html>
-<head>
-<title>Our Chat ❤️</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script type="module">
 
-<style>
-  * { box-sizing: border-box; }
+    import { initializeApp }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 
-  body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #f7f7f7;
-  }
+    import {
+      initializeAuth,
+      inMemoryPersistence,
+      signInAnonymously,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-  .header {
-    background: #ff4f81;
-    color: white;
-    padding: 14px;
-    text-align: center;
-    font-size: 21px;
-    font-weight: bold;
-    position: relative;
-  }
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      query,
+      orderBy,
+      limit,
+      onSnapshot,
+      serverTimestamp,
+      deleteDoc,
+      doc,
+      where,
+      getDocs
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-  .delete-all {
-    margin-top: 8px;
-    background: white;
-    color: #ff4f81;
-    border: none;
-    padding: 7px 12px;
-    border-radius: 15px;
-    font-size: 12px;
-    cursor: pointer;
-  }
 
-  .chat {
-<!DOCTYPE html>
-<html>
-<head>
-<title>Our Chat ❤️</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    const firebaseConfig = {
+      apiKey: "AIzaSyCuUiyx0uiiei3BsPx_DuvCWsewW4z3um",
+      authDomain: "ourchat-9931c.firebaseapp.com",
+      projectId: "ourchat-9931c",
+      storageBucket: "ourchat-9931c.firebasestorage.app",
+      messagingSenderId: "234906945730",
+      appId: "1:234906945730:web:c6093ff45cd2d694c9535b",
+      measurementId: "G-BZHHQ4F5WQ"
+    };
 
-<style>
-* {
-  box-sizing: border-box;
-}
 
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #f7f7f7;
-}
+    const app = initializeApp(firebaseConfig);
 
-/* HEADER */
-.header {
-  background: #ff4f81;
-  color: white;
-  padding: 14px;
-  text-align: center;
-  font-size: 21px;
-  font-weight: bold;
-}
-
-/* DELETE ALL BUTTON */
-.delete-all {
-  margin-top: 8px;
-  padding: 7px 12px;
-  border: none;
-  border-radius: 18px;
-  background: white;
-  color: #ff4f81;
-  font-size: 12px;
-  font-weight: bold;
-}
-
-/* CHAT */
-.chat {
-  height: calc(100dvh - 165px);
-  padding: 15px;
-  overflow-y: auto;
-  padding-bottom: 80px;
-}
-
-/* MESSAGE ROW */
-.message-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 10px 0;
-}
-
-.sent-row {
-  justify-content: flex-end;
-}
-
-/* MESSAGE */
-.message {
-  max-width: 75%;
-  padding: 11px 15px;
-  border-radius: 18px;
-  font-size: 16px;
-  word-wrap: break-word;
-}
-
-.received {
-  background: white;
-  border: 1px solidsages"), {
-
-      text: text,
-      name: myName,
-      uid: myUid,
-      createdAt: serverTimestamp()
-
+    const auth = initializeAuth(app, {
+      persistence: inMemoryPersistence
     });
 
-  } catch (e) {
-
-    alert("Send failed: " + e.code);
-
-    input.value = text;
-
-  }
-
-}
+    const db = getFirestore(app);
 
 
-document
-  .getElementById("sendBtn")
-  .addEventListener("click", sendMessage);
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("messageInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const deleteAllBtn = document.getElementById("deleteAllBtn");
+    const status = document.getElementById("status");
 
 
-input.addEventListener("keydown", (e) => {
+    let myName = localStorage.getItem("ourchat_name");
 
-  if (e.key === "Enter") {
-    sendMessage();
-  }
+    if (!myName) {
+      myName = prompt("तुमचे नाव काय?");
 
-});
+      if (!myName) {
+        myName = "Me";
+      }
 
-
-/* =========================
-   DELETE ALL MY MESSAGES
-========================= */
-
-deleteAllBtn.addEventListener("click", async () => {
-
-  if (!myUid) return;
-
-
-  const confirmDelete = confirm(
-    "तुमचे सर्व messages delete करायचे आहेत का?\n\n" +
-    "ही action undo करता येणार नाही."
-  );
-
-
-  if (!confirmDelete) return;
-
-
-  try {
-
-    const q = query(
-      collection(db, "messages"),
-      where("uid", "==", myUid)
-    );
-
-
-    const snap = await getDocs(q);
-
-
-    if (snap.empty) {
-
-      alert("तुमचे कोणतेही messages नाहीत.");
-
-      return;
+      localStorage.setItem("ourchat_name", myName);
     }
 
 
-    const deletePromises = [];
+    let myUid = null;
 
 
-    snap.forEach((d) => {
+    onAuthStateChanged(auth, function(user) {
 
-      deletePromises.push(
-        deleteDoc(doc(db, "messages", d.id))
-      );
+      if (!user) {
+        return;
+      }
+
+      myUid = user.uid;
+
+      listenMessages();
 
     });
 
 
-    await Promise.all(deletePromises);
+    signInAnonymously(auth).catch(function(error) {
+
+      status.textContent =
+        "Login error: " + error.code;
+
+    });
 
 
-    alert("तुमचे सर्व messages delete झाले ❤️");
+    function listenMessages() {
+
+      const messagesRef =
+        collection(db, "messages");
+
+      const q = query(
+        messagesRef,
+        orderBy("createdAt"),
+        limit(200)
+      );
 
 
-  } catch (e) {
+      onSnapshot(q, function(snapshot) {
 
-    alert(
-      "Delete All failed: " +
-      (e.code || e.message)
+        chat.innerHTML = "";
+
+
+        if (snapshot.empty) {
+
+          chat.innerHTML =
+            '<div id="status">No messages yet ❤️</div>';
+
+          return;
+        }
+
+
+        snapshot.forEach(function(messageDoc) {
+
+          const data = messageDoc.data();
+
+
+          const row =
+            document.createElement("div");
+
+          row.className = "row";
+
+
+          if (data.uid === myUid) {
+            row.classList.add("my-row");
+          }
+
+
+          const message =
+            document.createElement("div");
+
+          message.className = "message";
+
+
+          if (data.uid === myUid) {
+            message.classList.add("my-message");
+          }
+
+
+          const name =
+            document.createElement("div");
+
+          name.className = "name";
+
+          name.textContent =
+            data.name || "Unknown";
+
+
+          const text =
+            document.createElement("div");
+
+          text.textContent =
+            data.text || "";
+
+
+          message.appendChild(name);
+          message.appendChild(text);
+
+
+          row.appendChild(message);
+
+
+          if (data.uid === myUid) {
+
+            const deleteBtn =
+              document.createElement("button");
+
+            deleteBtn.className =
+              "deleteBtn";
+
+            deleteBtn.textContent =
+              "🗑️";
+
+
+            deleteBtn.onclick =
+              async function() {
+
+                const confirmDelete =
+                  confirm("Delete this message?");
+
+                if (!confirmDelete) {
+                  return;
+                }
+
+
+                try {
+
+                  await deleteDoc(
+                    doc(
+                      db,
+                      "messages",
+                      messageDoc.id
+                    )
+                  );
+
+                } catch (error) {
+
+                  alert(
+                    "Delete failed: " +
+                    error.code
+                  );
+
+                }
+
+              };
+
+
+            row.appendChild(deleteBtn);
+          }
+
+
+          chat.appendChild(row);
+
+        });
+
+
+        chat.scrollTop =
+          chat.scrollHeight;
+
+
+      }, function(error) {
+
+        chat.innerHTML =
+          "<div id='status'>Error: " +
+          error.code +
+          "</div>";
+
+      });
+
+    }
+
+
+    async function sendMessage() {
+
+      const text =
+        input.value.trim();
+
+
+      if (!text || !myUid) {
+        return;
+      }
+
+
+      input.value = "";
+
+
+      try {
+
+        await addDoc(
+          collection(db, "messages"),
+          {
+            text: text,
+            name: myName,
+            uid: myUid,
+            createdAt: serverTimestamp()
+          }
+        );
+
+      } catch (error) {
+
+        alert(
+          "Send failed: " +
+          error.code
+        );
+
+        input.value = text;
+
+      }
+
+    }
+
+
+    sendBtn.onclick =
+      sendMessage;
+
+
+    input.addEventListener(
+      "keydown",
+      function(event) {
+
+        if (event.key === "Enter") {
+          sendMessage();
+        }
+
+      }
     );
 
-  }
 
-});
+    deleteAllBtn.onclick =
+      async function() {
 
-</script>
+        if (!myUid) {
+          return;
+        }
+
+
+        const confirmDelete =
+          confirm(
+            "तुमचे सर्व messages delete करायचे आहेत?"
+          );
+
+
+        if (!confirmDelete) {
+          return;
+        }
+
+
+        try {
+
+          const q = query(
+            collection(db, "messages"),
+            where("uid", "==", myUid)
+          );
+
+
+          const snapshot =
+            await getDocs(q);
+
+
+          const deleteTasks = [];
+
+
+          snapshot.forEach(
+            function(messageDoc) {
+
+              deleteTasks.push(
+                deleteDoc(
+                  doc(
+                    db,
+                    "messages",
+                    messageDoc.id
+                  )
+                )
+              );
+
+            }
+          );
+
+
+          await Promise.all(deleteTasks);
+
+
+          alert("All your messages deleted ❤️");
+
+
+        } catch (error) {
+
+          alert(
+            "Delete All failed: " +
+            error.code
+          );
+
+        }
+
+      };
+
+  </script>
 
 </body>
 </html>
-
-यात आता काय मिळेल?
-
-- 🗑️ प्रत्येक तुमच्या message जवळ Delete button
-- 🗑️ Delete All My Messages
-- दुसऱ्या व्यक्तीचे messages तुम्ही delete करू शकणार नाही
-- Delete करण्यापूर्वी confirmation येईल
-- Firebase Firestore मधून message खरोखर delete होईल
-
-महत्त्वाचे: Firebase Firestore Security Rules मध्ये "delete" permission नसेल तर button काम करणार नाही. तुमच्या app साठी योग्य Firestore Rules सुद्धा बदलावे लागतील.
