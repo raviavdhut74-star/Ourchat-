@@ -8,26 +8,26 @@
     *{box-sizing:border-box}
     body{margin:0;font-family:Arial,sans-serif;background:#f7f7f7}
     .header{background:#ff4f81;color:#fff;text-align:center;padding:14px;font-size:22px;font-weight:bold}
-    #deleteAllBtn{margin-top:8px;padding:7px 12px;border:0;border-radius:20px;background:#fff;color:#ff4f81;font-weight:bold;cursor:pointer}
+    .hbtns{display:flex;justify-content:center;gap:8px;margin-top:8px}
+    .hbtns button{padding:7px 12px;border:0;border-radius:20px;background:#fff;color:#ff4f81;font-weight:bold;cursor:pointer}
     .chat{height:calc(100dvh - 150px);overflow-y:auto;padding:15px 15px 80px}
     .row{display:flex;align-items:center;gap:7px;margin:10px 0}
     .my-row{justify-content:flex-end}
     .message{max-width:75%;padding:11px 15px;border-radius:18px;background:#fff;border:1px solid #eee;word-wrap:break-word}
     .my-message{background:#ff4f81;color:#fff}
+    .my-message a{color:#fff}
     .name{font-size:12px;opacity:.7;margin-bottom:4px}
+    .media{max-width:100%;max-height:300px;border-radius:12px;display:block;cursor:pointer}
     .deleteBtn{width:32px;height:32px;border:0;border-radius:50%;background:#fff;color:red;font-size:15px;cursor:pointer}
     .inputArea{position:fixed;bottom:0;left:0;right:0;display:flex;gap:8px;padding:10px;background:#fff;border-top:1px solid #ddd}
-    #messageInput{flex:1;padding:13px;border:1px solid #ddd;border-radius:25px;font-size:16px;outline:none}
+    #attachBtn{width:44px;border:0;border-radius:50%;background:#f1f1f1;font-size:20px;cursor:pointer}
+    #messageInput{flex:1;min-width:0;padding:13px;border:1px solid #ddd;border-radius:25px;font-size:16px;outline:none}
     #sendBtn{width:70px;border:0;border-radius:25px;background:#ff4f81;color:#fff;font-weight:bold}
     #status{text-align:center;color:#999;margin-top:20px}
-  </style>
-</head>
-<body>
-  <div class="header">
-    ❤️ Our Chat
-    <br>
-    <button id="deleteAllBtn">🗑️ Delete All</button>
-  </div>
-
-  <div class="chat" id="chat">
-    <div id="status">Connecting...</div>
+    .overlay{position:fixed;inset:0;background:#111;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff}
+    .overlay[hidden]{display:none}
+    #remoteVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    #localVideo{position:absolute;top:16px;right:16px;width:110px;border-radius:12px;border:2px solid #fff;background:#000}
+    #callInfo,#incomingText{position:relative;font-size:20px;text-align:center;padding:12px}
+    #callInfo{position:absolute;top:20px;left:0;right:0}
+    .callBtns{position:absolute;bottom:40px;display:flex;gap:30px}
