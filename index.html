@@ -62,69 +62,530 @@ const chat = document.getElementById("chat");
 const input = document.getElementById("messageInput");
 const status = document.getElementById("status");
 
+<!DOCTYPE html>
+<html>
+<head>
+<title>Our Chat ❤️</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f7f7f7;
+  }
+
+  .header {
+    background: #ff4f81;
+    color: white;
+    padding: 14px;
+    text-align: center;
+    font-size: 21px;
+    font-weight: bold;
+    position: relative;
+  }
+
+  .delete-all {
+    margin-top: 8px;
+    background: white;
+    color: #ff4f81;
+    border: none;
+    padding: 7px 12px;
+    border-radius: 15px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .chat {
+    height: calc(100dvh - 160px);
+    padding: 15px;
+    overflow-y: auto;
+    padding-bottom: 80px;
+  }
+
+  .message {
+    max-width: 75%;
+    padding: 11px 15px;
+    margin: 10px 0;
+    border-radius: 18px;
+    font-size: 16px;
+    word-wrap: break-word;
+    position: relative;
+  }
+
+  .received {
+    background: white;
+    border: 1px solid #eee;
+    margin-right: auto;
+  }
+
+  .sent {
+    background: #ff4f81;
+    color: white;
+    margin-left: auto;
+  }
+
+  .who {
+    font-size: 12px;
+    opacity: .7;
+    margin-bottom: 3px;
+  }
+
+  .message-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .sent-row {
+    justify-content: flex-end;
+  }
+
+  .delete-btn {
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: #eee;
+    color: #e53935;
+    cursor: pointer;
+    font-size: 15px;
+  }
+
+  .delete-btn:hover {
+    background: #ffdede;
+  }
+
+  .input-area {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    padding: 10px;
+    background: white;
+    border-top: 1px solid #ddd;
+    z-index: 10;
+  }
+
+  #messageInput {
+    flex: 1;
+    padding: 13px;
+    border: 1px solid #ddd;
+    border-radius: 25px;
+    outline: none;
+    font-size: 16px;
+  }
+
+  #sendBtn {
+    margin-left: 8px;
+    width: 70px;
+    border: none;
+    border-radius: 25px;
+    background: #ff4f81;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  #status {
+    text-align: center;
+    color: #999;
+    font-size: 14px;
+    margin-top: 20px;
+  }
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  ❤️ Our Chat
+  <br>
+  <button class="delete-all" id="deleteAllBtn">
+    🗑️ Delete All My Messages
+  </button>
+</div>
+
+<div class="chat" id="chat">
+  <div id="status">Connecting...</div>
+</div>
+
+<div class="input-area">
+  <input
+    type="text"
+    id="messageInput"
+    placeholder="Type a message..."
+    autocomplete="off"
+  >
+  <button id="sendBtn">Send</button>
+</div>
+
+<script>
+window.addEventListener("error", function (e) {
+  var s = document.getElementById("status");
+  if (s) s.textContent = "Error: " + e.message;
+});
+
+window.addEventListener("unhandledrejection", function (e) {
+  var s = document.getElementById("status");
+  if (s)
+    s.textContent =
+      "Error: " + (e.reason && (e.reason.code || e.reason.message));
+});
+</script>
+
+<script type="module">
+
+import {
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+import {
+  initializeAuth,
+  inMemoryPersistence,
+  signInAnonymously,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  query,
+  orderBy,
+  limit,
+  onSnapshot,
+  serverTimestamp,
+  deleteDoc,
+  doc,
+  where,
+  getDocs
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCuUiyx0uiiei3BsPx_DuvCWsewW4z3um",
+  authDomain: "ourchat-9931c.firebaseapp.com",
+  projectId: "ourchat-9931c",
+  storageBucket: "ourchat-9931c.firebasestorage.app",
+  messagingSenderId: "234906945730",
+  appId: "1:234906945730:web:c6093ff45cd2d694c9535b",
+  measurementId: "G-BZHHQ4F5WQ"
+};
+
+
+const app = initializeApp(firebaseConfig);
+
+const auth = initializeAuth(app, {
+  persistence: inMemoryPersistence
+});
+
+const db = getFirestore(app);
+
+
+const chat = document.getElementById("chat");
+const input = document.getElementById("messageInput");
+const status = document.getElementById("status");
+const deleteAllBtn = document.getElementById("deleteAllBtn");
+
+
 let myName = null;
-try { myName = localStorage.getItem("ourchat_name"); } catch (e) {}
+
+try {
+  myName = localStorage.getItem("ourchat_name");
+} catch (e) {}
+
 if (!myName) {
-  try { myName = (prompt("तुमचे नाव काय?") || "").trim(); } catch (e) {}
+
+  try {
+    myName = (prompt("तुमचे नाव काय?") || "").trim();
+  } catch (e) {}
+
   if (!myName) myName = "Me";
-  try { localStorage.setItem("ourchat_name", myName); } catch (e) {}
+
+  try {
+    localStorage.setItem("ourchat_name", myName);
+  } catch (e) {}
 }
+
 
 let myUid = null;
 let started = false;
 
+
 onAuthStateChanged(auth, (user) => {
+
   if (!user) return;
+
   myUid = user.uid;
-  if (!started) { started = true; listen(); }
+
+  if (!started) {
+    started = true;
+    listen();
+  }
+
 });
+
 
 signInAnonymously(auth).catch((e) => {
   status.textContent = "Login error: " + e.code;
 });
 
+
+/* =========================
+   SHOW MESSAGES
+========================= */
+
 function listen() {
-  const q = query(collection(db, "messages"), orderBy("createdAt"), limit(200));
+
+  const q = query(
+    collection(db, "messages"),
+    orderBy("createdAt"),
+    limit(200)
+  );
+
   onSnapshot(q, (snap) => {
+
     chat.innerHTML = "";
+
     if (snap.empty) {
-      chat.innerHTML = '<div id="status">No messages yet. Say hi ❤️</div>';
+
+      chat.innerHTML =
+        '<div id="status">No messages yet. Say hi ❤️</div>';
+
+      return;
     }
+
+
     snap.forEach((d) => {
+
       const m = d.data();
+
+      const row = document.createElement("div");
+
+      row.className =
+        "message-row " +
+        (m.uid === myUid ? "sent-row" : "");
+
+
       const el = document.createElement("div");
-      el.className = "message " + (m.uid === myUid ? "sent" : "received");
+
+      el.className =
+        "message " +
+        (m.uid === myUid ? "sent" : "received");
+
+
       const who = document.createElement("div");
+
       who.className = "who";
+
       who.textContent = m.name || "";
+
+
       const txt = document.createElement("div");
+
       txt.textContent = m.text;
+
+
       el.appendChild(who);
       el.appendChild(txt);
-      chat.appendChild(el);
+
+      row.appendChild(el);
+
+
+      /* DELETE BUTTON
+         फक्त स्वतःच्या messages साठी
+      */
+
+      if (m.uid === myUid) {
+
+        const deleteBtn =
+          document.createElement("button");
+
+        deleteBtn.className = "delete-btn";
+
+        deleteBtn.textContent = "🗑️";
+
+        deleteBtn.title = "Delete message";
+
+
+        deleteBtn.addEventListener("click", async () => {
+
+          const confirmDelete =
+            confirm("हा message delete करायचा आहे का?");
+
+          if (!confirmDelete) return;
+
+          try {
+
+            await deleteDoc(
+              doc(db, "messages", d.id)
+            );
+
+          } catch (e) {
+
+            alert(
+              "Delete failed: " +
+              (e.code || e.message)
+            );
+
+          }
+
+        });
+
+        row.appendChild(deleteBtn);
+      }
+
+
+      chat.appendChild(row);
+
     });
+
+
     chat.scrollTop = chat.scrollHeight;
+
   }, (e) => {
-    chat.innerHTML = '<div id="status">Error: ' + e.code + '</div>';
+
+    chat.innerHTML =
+      '<div id="status">Error: ' +
+      e.code +
+      '</div>';
+
   });
+
 }
+
+
+/* =========================
+   SEND MESSAGE
+========================= */
 
 async function sendMessage() {
+
   const text = input.value.trim();
+
   if (!text || !myUid) return;
+
   input.value = "";
+
   try {
+
     await addDoc(collection(db, "messages"), {
-      text, name: myName, uid: myUid, createdAt: serverTimestamp()
+
+      text: text,
+      name: myName,
+      uid: myUid,
+      createdAt: serverTimestamp()
+
     });
+
   } catch (e) {
+
     alert("Send failed: " + e.code);
+
     input.value = text;
+
   }
+
 }
 
-document.getElementById("sendBtn").addEventListener("click", sendMessage);
-input.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+
+document
+  .getElementById("sendBtn")
+  .addEventListener("click", sendMessage);
+
+
+input.addEventListener("keydown", (e) => {
+
+  if (e.key === "Enter") {
+    sendMessage();
+  }
+
+});
+
+
+/* =========================
+   DELETE ALL MY MESSAGES
+========================= */
+
+deleteAllBtn.addEventListener("click", async () => {
+
+  if (!myUid) return;
+
+
+  const confirmDelete = confirm(
+    "तुमचे सर्व messages delete करायचे आहेत का?\n\n" +
+    "ही action undo करता येणार नाही."
+  );
+
+
+  if (!confirmDelete) return;
+
+
+  try {
+
+    const q = query(
+      collection(db, "messages"),
+      where("uid", "==", myUid)
+    );
+
+
+    const snap = await getDocs(q);
+
+
+    if (snap.empty) {
+
+      alert("तुमचे कोणतेही messages नाहीत.");
+
+      return;
+    }
+
+
+    const deletePromises = [];
+
+
+    snap.forEach((d) => {
+
+      deletePromises.push(
+        deleteDoc(doc(db, "messages", d.id))
+      );
+
+    });
+
+
+    await Promise.all(deletePromises);
+
+
+    alert("तुमचे सर्व messages delete झाले ❤️");
+
+
+  } catch (e) {
+
+    alert(
+      "Delete All failed: " +
+      (e.code || e.message)
+    );
+
+  }
+
+});
+
 </script>
+
 </body>
 </html>
+
+यात आता काय मिळेल?
+
+- 🗑️ प्रत्येक तुमच्या message जवळ Delete button
+- 🗑️ Delete All My Messages
+- दुसऱ्या व्यक्तीचे messages तुम्ही delete करू शकणार नाही
+- Delete करण्यापूर्वी confirmation येईल
+- Firebase Firestore मधून message खरोखर delete होईल
+
+महत्त्वाचे: Firebase Firestore Security Rules मध्ये "delete" permission नसेल तर button काम करणार नाही. तुमच्या app साठी योग्य Firestore Rules सुद्धा बदलावे लागतील.
