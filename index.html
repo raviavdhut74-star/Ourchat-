@@ -35,6 +35,12 @@
     #endBtn,#declineBtn{background:#e53935}
     #acceptBtn{background:#2e7d32}
     #muteBtn{background:#fff}
+    #loginBox{background:#f7f7f7;z-index:20}
+    .loginCard{width:85%;max-width:340px;display:flex;flex-direction:column;gap:12px;color:#333}
+    .loginTitle{text-align:center;font-size:26px;font-weight:bold;color:#ff4f81;margin-bottom:6px}
+    .loginCard input{padding:13px;border:1px solid #ddd;border-radius:25px;font-size:16px;outline:none}
+    #loginBtn{padding:13px;border:0;border-radius:25px;background:#ff4f81;color:#fff;font-size:16px;font-weight:bold}
+    #loginErr{color:#d32f2f;font-size:14px;text-align:center;min-height:18px}
   </style>
 </head>
 <body>
@@ -44,6 +50,7 @@
       <button id="voiceBtn">📞</button>
       <button id="videoBtn">🎥</button>
       <button id="deleteAllBtn">🗑️ Delete All</button>
+      <button id="logoutBtn">🚪</button>
     </div>
   </div>
 
@@ -68,9 +75,19 @@
     <div class="callBtns"><button id="acceptBtn">✅</button><button id="declineBtn">❌</button></div>
   </div>
 
+  <div id="loginBox" class="overlay">
+    <div class="loginCard">
+      <div class="loginTitle">❤️ Our Chat</div>
+      <input type="email" id="loginEmail" placeholder="Email" autocomplete="username">
+      <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
+      <button id="loginBtn">Login</button>
+      <div id="loginErr"></div>
+    </div>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import {
       getFirestore, collection, addDoc, setDoc, updateDoc, query, orderBy, limit,
       onSnapshot, serverTimestamp, deleteDoc, doc, where, getDocs
@@ -101,22 +118,36 @@
     const callUI=$("callUI"), remoteVideo=$("remoteVideo"), localVideo=$("localVideo"), callInfo=$("callInfo");
     const incoming=$("incoming"), incomingText=$("incomingText");
 
-    let myName = localStorage.getItem("ourchat_name");
-    if(!myName){
-      myName=(prompt("तुमचे नाव काय?")||"").trim()||"Me";
-      localStorage.setItem("ourchat_name",myName);
-    }
-
-    let myUid=null, started=false;
+    let myName=null, myUid=null, started=false;
 
     onAuthStateChanged(auth,user=>{
-      if(!user){
-        signInAnonymously(auth).catch(e=>{ chat.innerHTML='<div id="status">Login error: '+e.code+'</div>'; });
+      if(!user||user.isAnonymous){
+        if(user) signOut(auth);
+        $("loginBox").hidden=false;
         return;
       }
+      $("loginBox").hidden=true;
       myUid=user.uid;
+      if(!myName){
+        myName=localStorage.getItem("ourchat_name");
+        if(!myName){
+          myName=(prompt("तुमचे नाव काय?")||"").trim()||"Me";
+          localStorage.setItem("ourchat_name",myName);
+        }
+      }
       if(!started){ started=true; listenMessages(); listenCalls(); }
     });
+
+    async function doLogin(){
+      const em=$("loginEmail").value.trim(), pw=$("loginPass").value;
+      if(!em||!pw)return;
+      $("loginErr").textContent="";
+      try{ await signInWithEmailAndPassword(auth,em,pw); }
+      catch(e){ $("loginErr").textContent="Email kinva password chukicha aahe ("+e.code+")"; }
+    }
+    $("loginBtn").onclick=doLogin;
+    $("loginPass").addEventListener("keydown",e=>{ if(e.key==="Enter")doLogin(); });
+    $("logoutBtn").onclick=async()=>{ if(confirm("Logout karaycha?")){ await signOut(auth); location.reload(); } };
 
     /* ================= MESSAGES ================= */
     function listenMessages(){
@@ -219,6 +250,165 @@
         alert("Upload failed: "+(e.message||e));
       }finally{
         attachBtn.textContent="📎"; attachBtn.disabled=false;
+      }
+    };
+
+    /* ================= VOICE / VIDEO CALL (WebRTC) ================= */
+    const rtcCfg={iceServers:[{urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]}]};
+    let pc=null, localStream=null, callRef=null, unsubs=[], pending=[], ringTimer=null, answered=false, incomingCall=null;
+
+    async function setupMedia(video){
+      localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:video?{facingMode:"user"}:false});
+      localVideo.srcObject=localStream;
+      localVideo.style.display=video?"block":"none";
+      $("muteBtn").textContent="🎤";
+    }
+
+    function createPC(){
+      pc=new RTCPeerConnection(rtcCfg);
+      localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+      const remote=new MediaStream();
+      remoteVideo.srcObject=remote;
+      pc.ontrack=e=>e.streams[0].getTracks().forEach(t=>remote.addTrack(t));
+      pc.onconnectionstatechange=()=>{
+        if(!pc)return;
+        if(pc.connectionState==="connected") callInfo.textContent="🔴 Live";
+        if(pc.connectionState==="failed") endCall(true);
+      };
+    }
+
+    function addCand(c){
+      if(pc&&pc.remoteDescription) pc.addIceCandidate(c).catch(()=>{});
+      else pending.push(c);
+    }
+    function flushCands(){ pending.forEach(c=>pc.addIceCandidate(c).catch(()=>{})); pending=[]; }
+
+    function showCallUI(text){ callInfo.textContent=text; callUI.hidden=false; }
+
+    async function startCall(video){
+      if(pc||!myUid)return;
+      try{ await setupMedia(video); }
+      catch(e){ alert("Mic/Camera permission milali nahi: "+e.name); return; }
+
+      showCallUI("Calling...");
+      createPC();
+      callRef=doc(collection(db,"calls"));
+      const callerCands=collection(callRef,"callerCandidates");
+      const calleeCands=collection(callRef,"calleeCandidates");
+      pc.onicecandidate=e=>{ if(e.candidate) addDoc(callerCands,e.candidate.toJSON()); };
+
+      try{
+        const offer=await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await setDoc(callRef,{
+          from:myUid,name:myName,video,status:"ringing",createdAt:Date.now(),
+          offer:{type:offer.type,sdp:offer.sdp}
+        });
+      }catch(e){ alert("Call failed: "+(e.code||e.message)); endCall(false); return; }
+
+      unsubs.push(onSnapshot(callRef,async s=>{
+        const d=s.data();
+        if(!d||!pc)return;
+        if(d.answer&&!answered){
+          answered=true;
+          clearTimeout(ringTimer);
+          callInfo.textContent="Connecting...";
+          await pc.setRemoteDescription(d.answer);
+          flushCands();
+        }
+        if(d.status==="ended"||d.status==="declined") endCall(false);
+      }));
+      unsubs.push(onSnapshot(calleeCands,s=>s.docChanges().forEach(c=>{ if(c.type==="added") addCand(c.doc.data()); })));
+      ringTimer=setTimeout(()=>{ if(pc&&!answered) endCall(true); },45000);
+    }
+
+    async function acceptCall(){
+      if(!incomingCall)return;
+      const {ref,data}=incomingCall;
+      incomingCall=null; incoming.hidden=true;
+      try{ await setupMedia(data.video); }
+      catch(e){ alert("Mic/Camera permission milali nahi: "+e.name); updateDoc(ref,{status:"declined"}); return; }
+
+      callRef=ref;
+      showCallUI("Connecting...");
+      createPC();
+      const callerCands=collection(ref,"callerCandidates");
+      const calleeCands=collection(ref,"calleeCandidates");
+      pc.onicecandidate=e=>{ if(e.candidate) addDoc(calleeCands,e.candidate.toJSON()); };
+
+      try{
+        await pc.setRemoteDescription(data.offer);
+        const ans=await pc.createAnswer();
+        await pc.setLocalDescription(ans);
+        await updateDoc(ref,{answer:{type:ans.type,sdp:ans.sdp},status:"active"});
+      }catch(e){ alert("Call failed: "+(e.code||e.message)); endCall(true); return; }
+
+      unsubs.push(onSnapshot(callerCands,s=>s.docChanges().forEach(c=>{ if(c.type==="added") addCand(c.doc.data()); })));
+      unsubs.push(onSnapshot(ref,s=>{ const d=s.data(); if(d&&d.status==="ended") endCall(false); }));
+    }
+
+    function declineCall(){
+      if(!incomingCall)return;
+      updateDoc(incomingCall.ref,{status:"declined"}).catch(()=>{});
+      incomingCall=null; incoming.hidden=true;
+    }
+
+    function endCall(notify){
+      clearTimeout(ringTimer);
+      if(notify&&callRef) updateDoc(callRef,{status:"ended"}).catch(()=>{});
+      unsubs.forEach(u=>u()); unsubs=[]; pending=[];
+      if(localStream) localStream.getTracks().forEach(t=>t.stop());
+      if(pc){ pc.onicecandidate=null; pc.onconnectionstatechange=null; pc.close(); }
+      pc=null; localStream=null; callRef=null; answered=false;
+      remoteVideo.srcObject=null; localVideo.srcObject=null;
+      callUI.hidden=true;
+    }
+
+    function listenCalls(){
+      const q=query(collection(db,"calls"),where("status","==","ringing"));
+      onSnapshot(q,snap=>{
+        snap.docChanges().forEach(c=>{
+          const d=c.doc.data();
+          if(c.type==="added"&&d.from!==myUid&&!pc&&!incomingCall&&Date.now()-d.createdAt<90000){
+            incomingCall={ref:c.doc.ref,data:d,id:c.doc.id};
+            incomingText.textContent=(d.video?"🎥 Video call":"📞 Voice call")+" — "+(d.name||"");
+            incoming.hidden=false;
+          }
+          if(c.type==="removed"&&incomingCall&&incomingCall.id===c.doc.id){
+            incomingCall=null; incoming.hidden=true;
+          }
+        });
+      },()=>{});
+    }
+
+    $("voiceBtn").onclick=()=>startCall(false);
+    $("videoBtn").onclick=()=>startCall(true);
+    $("endBtn").onclick=()=>endCall(true);
+    $("acceptBtn").onclick=acceptCall;
+    $("declineBtn").onclick=declineCall;
+    $("muteBtn").onclick=()=>{
+      if(!localStream)return;
+      const t=localStream.getAudioTracks()[0];
+      if(!t)return;
+      t.enabled=!t.enabled;
+      $("muteBtn").textContent=t.enabled?"🎤":"🔇";
+    };
+
+    /* ================= DELETE ALL ================= */
+    deleteAllBtn.onclick=async()=>{
+      if(!myUid)return;
+      if(!confirm("तुमचे सर्व messages delete करायचे आहेत?"))return;
+      try{
+        const q=query(collection(db,"messages"),where("uid","==",myUid));
+        const snapshot=await getDocs(q);
+        await Promise.all(snapshot.docs.map(d=>deleteDoc(doc(db,"messages",d.id))));
+        alert("All your messages deleted ❤️");
+      }catch(e){ alert("Delete All failed: "+e.code); }
+    };
+  </script>
+</body>
+</html>
+false;
       }
     };
 
