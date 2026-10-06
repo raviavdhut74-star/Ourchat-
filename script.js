@@ -169,11 +169,13 @@
           rc.className="react"; rc.dataset.id=messageDoc.id;
           message.appendChild(rc);
 
-          let lpT=null, lpFired=false;
-          const lpStart=()=>{ lpFired=false; clearTimeout(lpT); lpT=setTimeout(()=>{ lpFired=true; if(navigator.vibrate) navigator.vibrate(15); openMsgMenu(messageDoc.id,data,mine); },480); };
+          let lpT=null, lpFired=false, lpX=0, lpY=0;
+          const lpStart=e=>{ lpFired=false; clearTimeout(lpT); const t=e.touches[0]; lpX=t.clientX; lpY=t.clientY; lpT=setTimeout(()=>{ lpFired=true; if(navigator.vibrate) navigator.vibrate(15); openMsgMenu(messageDoc.id,data,mine); },400); };
           const lpEnd=()=>clearTimeout(lpT);
+          const lpMove=e=>{ const t=e.touches[0]; if(Math.abs(t.clientX-lpX)>12||Math.abs(t.clientY-lpY)>12) clearTimeout(lpT); };
           message.addEventListener("touchstart",lpStart,{passive:true});
-          ["touchend","touchmove","touchcancel"].forEach(ev=>message.addEventListener(ev,lpEnd,{passive:true}));
+          message.addEventListener("touchmove",lpMove,{passive:true});
+          ["touchend","touchcancel"].forEach(ev=>message.addEventListener(ev,lpEnd,{passive:true}));
           message.addEventListener("contextmenu",e=>{ e.preventDefault(); lpFired=true; openMsgMenu(messageDoc.id,data,mine); });
           message.onclick=e=>{
             if(lpFired){ lpFired=false; return; }
@@ -186,16 +188,6 @@
           };
           row.appendChild(message);
 
-          if(mine){
-            const del=document.createElement("button");
-            del.className="deleteBtn"; del.textContent="🗑️"; del.title="Delete message";
-            del.onclick=async()=>{
-              if(!confirm("Delete this message?")) return;
-              try{ await deleteDoc(doc(db,"messages",messageDoc.id)); }
-              catch(e){ alert("Delete failed: "+e.code); }
-            };
-            row.appendChild(del);
-          }
           chat.appendChild(row);
         });
         chat.scrollTop=chat.scrollHeight;
