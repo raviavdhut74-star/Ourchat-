@@ -461,7 +461,7 @@
 
     // dark mode
     function applyDark(on){ document.body.classList.toggle("dark",on); $("darkBtn").textContent=on?"☀️ Light mode":"🌙 Dark mode"; }
-    applyDark(localStorage.getItem("ourchat_dark")==="1");
+    applyDark(localStorage.getItem("ourchat_dark")!=="0");
     $("darkBtn").onclick=()=>{
       const on=!document.body.classList.contains("dark");
       localStorage.setItem("ourchat_dark",on?"1":"0");
