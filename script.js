@@ -215,7 +215,7 @@
       if(!file||!myUid)return;
       if(file.size>MAX_MB*1024*1024){ alert("File "+MAX_MB+" MB peksha motha aahe."); return; }
 
-      attachBtn.textContent="⏳"; attachBtn.disabled=true;
+      setIcon(attachBtn,"busy"); attachBtn.disabled=true;
       try{
         const fd=new FormData();
         fd.append("file",file);
@@ -229,7 +229,7 @@
       }catch(e){
         alert("Upload failed: "+(e.message||e));
       }finally{
-        attachBtn.textContent="📎"; attachBtn.disabled=false;
+        setIcon(attachBtn,"clip"); attachBtn.disabled=false;
       }
     };
 
@@ -411,7 +411,7 @@
     }
     function updateTicks(){
       const lr=(other&&other.lastRead)||0;
-      document.querySelectorAll(".tick").forEach(t=>{ t.textContent=(+t.dataset.ts<=lr)?" ✓✓":" ✓"; });
+      document.querySelectorAll(".tick").forEach(t=>{ const sn=(+t.dataset.ts<=lr); t.textContent=sn?" ✓✓":" ✓"; t.classList.toggle("seen",sn); });
     }
     function listenPresence(){
       onSnapshot(collection(db,"presence"),snap=>{
@@ -482,8 +482,8 @@
         st.getTracks().forEach(t=>t.stop());
         const blob=new Blob(chunks,{type:rec.mimeType||"audio/webm"});
         rec=null; micBtn.style.background="";
-        if(blob.size<1500){ micBtn.textContent="🎤"; return; }
-        micBtn.textContent="⏳";
+        if(blob.size<1500){ setIcon(micBtn,"mic"); return; }
+        setIcon(micBtn,"busy");
         try{
           const fd=new FormData();
           fd.append("file",blob,"voice.webm");
@@ -493,9 +493,9 @@
           if(!r.ok||!j.secure_url) throw new Error((j.error&&j.error.message)||"Upload failed");
           await addMsg({type:"audio",url:j.secure_url,text:""});
         }catch(e){ alert("Voice failed: "+(e.message||e)); }
-        micBtn.textContent="🎤";
+        setIcon(micBtn,"mic");
       };
-      rec.start(); micBtn.textContent="⏹️"; micBtn.style.background="#ffd0dc";
+      rec.start(); setIcon(micBtn,"stop"); 
     };
 
     /* ================= SNAP / STORY / STREAK / REACTION ================= */
@@ -557,8 +557,8 @@
     function updateSnaps(){
       document.querySelectorAll(".snap").forEach(e=>{
         const o=opened.has(e.dataset.id), mine=!!e.dataset.mine;
-        e.className="snap"+(o?" done":"");
-        e.textContent=o?"📸 Opened":mine?"📸 Snap sent":"📸 Tap to view";
+        e.className="snap"+(o?" done":"")+(mine?" mine":"");
+        e.textContent=o?"Opened":mine?"Snap sent":"Tap to view";
       });
     }
     $("snapBtn").onclick=()=>$("snapInput").click();
@@ -588,7 +588,7 @@
       stories.slice().reverse().forEach(s=>{
         const it=document.createElement("div"); it.className="sItem";
         const c=document.createElement("div"); c.className="sCircle sRing";
-        c.style.backgroundImage="url('"+s.url+"')";
+        c.style.setProperty("--img","url('"+s.url+"')");
         const n=document.createElement("span"); n.textContent=s.uid===myUid?"You":(s.name||"");
         it.appendChild(c); it.appendChild(n);
         const cap="📖 "+(s.name||"")+" · "+new Date(s.t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
@@ -615,6 +615,14 @@
       while(ok(d)){ n++; d.setDate(d.getDate()-1); }
       $("streak").textContent=n?"🔥"+n:"";
     }
+
+    function setIcon(b,n){
+      b.innerHTML='<svg class="ic"><use href="#i-'+n+'"/></svg>';
+      b.classList.toggle("rec",n==="stop");
+      b.classList.toggle("busy",n==="busy");
+    }
+
+    $("camBtn").onclick=()=>$("snapInput").click();
 
     /* ================= MENU ================= */
     $("menuBtn").onclick=()=>{ $("menu").hidden=!$("menu").hidden; };
