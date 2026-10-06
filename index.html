@@ -8,7 +8,7 @@
 </head>
 <body>
   <div class="header">
-    ❤️ Our Chat
+    ❤️ Our Chat <span id="streak"></span>
     <div id="sub"></div>
     <div class="hbtns">
       <button id="voiceBtn">📞</button>
@@ -16,8 +16,15 @@
       <button id="heartBtn" title="Miss you">❤️</button>
       <button id="darkBtn" title="Dark mode">🌙</button>
       <button id="deleteAllBtn" title="Delete all my messages">🗑️</button>
+      <button id="clearAllBtn" title="Clear chat for everyone">🧹</button>
       <button id="logoutBtn">🚪</button>
     </div>
+  </div>
+
+  <div id="storyBar">
+    <div class="sItem" id="snapBtn"><div class="sCircle">📸</div><span>Snap</span></div>
+    <div class="sItem" id="addStory"><div class="sCircle">➕</div><span>Story</span></div>
+    <div id="storyList"></div>
   </div>
 
   <div class="chat" id="chat"><div id="status">Connecting...</div></div>
@@ -28,6 +35,14 @@
     <input type="file" id="fileInput" hidden>
     <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off">
     <button id="sendBtn">Send</button>
+  </div>
+
+  <input type="file" id="snapInput" accept="image/*" capture="environment" hidden>
+  <input type="file" id="storyInput" accept="image/*" hidden>
+  <div id="viewer" class="overlay" hidden>
+    <img id="viewImg" alt="">
+    <div id="viewTop"></div>
+    <button id="viewDel" hidden>🗑️</button>
   </div>
 
   <div id="replyBar" hidden><span id="replyText"></span><button id="replyX">✕</button></div>

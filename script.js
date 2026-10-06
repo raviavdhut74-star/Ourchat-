@@ -47,7 +47,7 @@
           localStorage.setItem("ourchat_name",myName);
         }
       }
-      if(!started){ started=true; listenMessages(); listenCalls(); listenPresence(); }
+      if(!started){ started=true; listenMessages(); listenCalls(); listenPresence(); listenExtras(); }
     });
 
     async function doLogin(){
@@ -80,7 +80,7 @@
         chat.innerHTML="";
         if(snapshot.empty){ chat.innerHTML='<div id="status">No messages yet ❤️</div>'; return; }
 
-        let lastDay="";
+        let lastDay=""; const dayMap={};
         snapshot.forEach(messageDoc=>{
           const data=messageDoc.data();
           const mine=data.uid===myUid;
@@ -88,6 +88,7 @@
 
           if(ts){
             const day=ts.toDateString();
+            (dayMap[day]=dayMap[day]||new Set()).add(data.uid);
             if(day!==lastDay){
               lastDay=day;
               const chip=document.createElement("div");
@@ -127,6 +128,11 @@
             const v=document.createElement("video");
             v.className="media"; v.src=data.url; v.controls=true; v.preload="metadata"; v.playsInline=true;
             message.appendChild(v);
+          }else if(type==="snap"){
+            const sn=document.createElement("div");
+            sn.className="snap"; sn.dataset.id=messageDoc.id; sn.dataset.mine=mine?"1":"";
+            sn.onclick=()=>openSnap(data,messageDoc.id,mine);
+            message.appendChild(sn);
           }else if(type==="audio"){
             const au=document.createElement("audio");
             au.src=data.url; au.controls=true; au.preload="metadata";
@@ -154,9 +160,17 @@
             message.appendChild(tm);
           }
 
+          const rc=document.createElement("div");
+          rc.className="react"; rc.dataset.id=messageDoc.id;
+          message.appendChild(rc);
+
           message.onclick=e=>{
-            if(["A","IMG","VIDEO","AUDIO"].includes(e.target.tagName)) return;
-            setReply(data);
+            if(["A","IMG","VIDEO","AUDIO"].includes(e.target.tagName)||e.target.closest(".snap")) return;
+            const now=Date.now();
+            if(lastTap.id===messageDoc.id&&now-lastTap.t<350){
+              clearTimeout(lastTap.timer); lastTap.id=null; toggleHeart(messageDoc.id); return;
+            }
+            lastTap={id:messageDoc.id,t:now,timer:setTimeout(()=>setReply(data),350)};
           };
           row.appendChild(message);
 
@@ -173,7 +187,7 @@
           chat.appendChild(row);
         });
         chat.scrollTop=chat.scrollHeight;
-        updateTicks();
+        updateTicks(); updateSnaps(); updateReacts(); updateStreak(dayMap);
         if(!document.hidden) setPresence({lastRead:Date.now()});
       },error=>{ chat.innerHTML='<div id="status">Error: '+error.code+'</div>'; });
     }
@@ -482,6 +496,135 @@
         micBtn.textContent="🎤";
       };
       rec.start(); micBtn.textContent="⏹️"; micBtn.style.background="#ffd0dc";
+    };
+
+    /* ================= SNAP / STORY / STREAK / REACTION ================= */
+    let opened=new Set(), reacts={}, stories=[], vTimer=null, lastTap={id:null,t:0,timer:null};
+
+    async function cloudUpload(file){
+      const fd=new FormData();
+      fd.append("file",file); fd.append("upload_preset",UPLOAD_PRESET);
+      const r=await fetch("https://api.cloudinary.com/v1_1/"+CLOUD_NAME+"/auto/upload",{method:"POST",body:fd});
+      const j=await r.json();
+      if(!r.ok||!j.secure_url) throw new Error((j.error&&j.error.message)||"Upload failed");
+      return j.secure_url;
+    }
+
+    function listenExtras(){
+      onSnapshot(collection(db,"snapViews"),s=>{ opened=new Set(); s.forEach(d=>opened.add(d.id)); updateSnaps(); },()=>{});
+      onSnapshot(collection(db,"reactions"),s=>{
+        reacts={};
+        s.forEach(d=>{ const r=d.data(); (reacts[r.msgId]=reacts[r.msgId]||{})[r.uid]=r.emoji; });
+        updateReacts();
+      },()=>{});
+      onSnapshot(query(collection(db,"stories"),orderBy("createdAt"),limit(30)),s=>{
+        stories=[];
+        s.forEach(d=>{
+          const x=d.data();
+          const t=x.createdAt&&x.createdAt.toMillis?x.createdAt.toMillis():Date.now();
+          if(Date.now()-t<86400000) stories.push({id:d.id,...x,t});
+        });
+        drawStories();
+      },()=>{});
+    }
+
+    // viewer (snap + story)
+    function showViewer(url,cap,secs,onDel){
+      $("viewImg").src=url;
+      $("viewDel").hidden=!onDel;
+      $("viewDel").onclick=onDel?async()=>{ closeViewer(); try{ await onDel(); }catch(e){} }:null;
+      $("viewer").hidden=false;
+      clearInterval(vTimer);
+      $("viewTop").textContent=secs?cap+" · "+secs+"s":cap;
+      if(secs){
+        let n=secs;
+        vTimer=setInterval(()=>{
+          n--;
+          if(n<=0) closeViewer(); else $("viewTop").textContent=cap+" · "+n+"s";
+        },1000);
+      }
+    }
+    function closeViewer(){ clearInterval(vTimer); $("viewer").hidden=true; $("viewImg").src=""; }
+    $("viewer").onclick=e=>{ if(e.target.id!=="viewDel") closeViewer(); };
+
+    // view-once snap
+    function openSnap(d,id,mine){
+      if(mine||opened.has(id)) return;
+      opened.add(id); updateSnaps();
+      setDoc(doc(db,"snapViews",id),{by:myUid,at:Date.now()}).catch(()=>{});
+      showViewer(d.url,"📸 "+(d.name||""),5,null);
+    }
+    function updateSnaps(){
+      document.querySelectorAll(".snap").forEach(e=>{
+        const o=opened.has(e.dataset.id), mine=!!e.dataset.mine;
+        e.className="snap"+(o?" done":"");
+        e.textContent=o?"📸 Opened":mine?"📸 Snap sent":"📸 Tap to view";
+      });
+    }
+    $("snapBtn").onclick=()=>$("snapInput").click();
+    $("snapInput").onchange=async e=>{
+      const f=e.target.files[0]; e.target.value="";
+      if(!f||!myUid) return;
+      $("snapBtn").style.opacity=.4;
+      try{ await addMsg({type:"snap",url:await cloudUpload(f),text:""}); }
+      catch(err){ alert("Snap failed: "+(err.message||err)); }
+      $("snapBtn").style.opacity=1;
+    };
+
+    // stories
+    $("addStory").onclick=()=>$("storyInput").click();
+    $("storyInput").onchange=async e=>{
+      const f=e.target.files[0]; e.target.value="";
+      if(!f||!myUid) return;
+      $("addStory").style.opacity=.4;
+      try{
+        const url=await cloudUpload(f);
+        await addDoc(collection(db,"stories"),{url,name:myName,uid:myUid,createdAt:serverTimestamp()});
+      }catch(err){ alert("Story failed: "+(err.message||err)); }
+      $("addStory").style.opacity=1;
+    };
+    function drawStories(){
+      const box=$("storyList"); box.innerHTML="";
+      stories.slice().reverse().forEach(s=>{
+        const it=document.createElement("div"); it.className="sItem";
+        const c=document.createElement("div"); c.className="sCircle sRing";
+        c.style.backgroundImage="url('"+s.url+"')";
+        const n=document.createElement("span"); n.textContent=s.uid===myUid?"You":(s.name||"");
+        it.appendChild(c); it.appendChild(n);
+        const cap="📖 "+(s.name||"")+" · "+new Date(s.t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+        it.onclick=()=>showViewer(s.url,cap,0,s.uid===myUid?()=>deleteDoc(doc(db,"stories",s.id)):null);
+        box.appendChild(it);
+      });
+    }
+
+    // reactions (double tap)
+    function toggleHeart(id){
+      const has=reacts[id]&&reacts[id][myUid];
+      const ref=doc(db,"reactions",id+"_"+myUid);
+      (has?deleteDoc(ref):setDoc(ref,{msgId:id,uid:myUid,emoji:"❤️"})).catch(e=>alert("Reaction failed: "+e.code));
+    }
+    function updateReacts(){
+      document.querySelectorAll(".react").forEach(e=>{ e.textContent=Object.values(reacts[e.dataset.id]||{}).join(""); });
+    }
+
+    // streak
+    function updateStreak(m){
+      const d=new Date(); let n=0;
+      const ok=x=>m[x.toDateString()]&&m[x.toDateString()].size>=2;
+      if(!ok(d)) d.setDate(d.getDate()-1);
+      while(ok(d)){ n++; d.setDate(d.getDate()-1); }
+      $("streak").textContent=n?"🔥"+n:"";
+    }
+
+    /* ================= CLEAR CHAT FOR EVERYONE ================= */
+    $("clearAllBtn").onclick=async()=>{
+      if(!myUid) return;
+      if(!confirm("⚠️ दोघांचे सगळे messages सर्वांसाठी कायमचे delete होतील. पुढे जायचे?")) return;
+      if(!confirm("खरंच delete करायचे? हे परत मिळणार नाही.")) return;
+      try{
+        const snapshot=await getDocs(collection(db,"messages"));
+        await Promise.all(snapshot.docs.map(d=>deleteDoc(doc(db,"messages",d.id))));
+      }catch(e){ alert("Clear failed: "+e.code); }
     };
 
     /* ================= DELETE ALL ================= */
