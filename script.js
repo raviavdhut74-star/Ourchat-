@@ -1,223 +1,45 @@
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import {
-      getFirestore, collection, addDoc, setDoc, updateDoc, query, orderBy, limit,
-      onSnapshot, serverTimestamp, deleteDoc, doc, where, getDocs
-    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-    // ===== Cloudinary (photo / video / file upload) =====
-    const CLOUD_NAME = "irn5vnzr";
-    const UPLOAD_PRESET = "q5t0jb1h";
-    const MAX_MB = 100;
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyCuUiyx0uiiei3BsPx_DuvCWsewW4z3umw",
-      authDomain: "ourchat-9931c.firebaseapp.com",
-      projectId: "ourchat-9931c",
-      storageBucket: "ourchat-9931c.firebasestorage.app",
-      messagingSenderId: "234906945730",
-      appId: "1:234906945730:web:c6093ff45cd2d694c9535b",
-      measurementId: "G-BZHHQ4F5WQ"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const $ = id => document.getElementById(id);
-
-    const chat=$("chat"), input=$("messageInput"), sendBtn=$("sendBtn"), deleteAllBtn=$("deleteAllBtn");
-    const attachBtn=$("attachBtn"), fileInput=$("fileInput");
-    const callUI=$("callUI"), remoteVideo=$("remoteVideo"), localVideo=$("localVideo"), callInfo=$("callInfo");
-    const incoming=$("incoming"), incomingText=$("incomingText");
-
-    let myName=null, myUid=null, started=false;
-
-    onAuthStateChanged(auth,user=>{
-      if(!user||user.isAnonymous){
-        if(user) signOut(auth);
-        $("loginBox").hidden=false;
-        return;
-      }
-      $("loginBox").hidden=true;
-      myUid=user.uid;
-      if(!myName){
-        myName=localStorage.getItem("ourchat_name");
-        if(!myName){
-          myName=(prompt("What is your name?")||"").trim()||"Me";
-          localStorage.setItem("ourchat_name",myName);
-        }
-      }
-      if(!started){ started=true; listenMessages(); listenCalls(); listenPresence(); listenExtras(); listenReels(); listenPosts(); }
-    });
-
-    async function doLogin(){
-      const em=$("loginEmail").value.trim(), pw=$("loginPass").value;
-      if(!em||!pw)return;
-      $("loginErr").textContent="";
-      try{ await signInWithEmailAndPassword(auth,em,pw); }
-      catch(e){ $("loginErr").textContent="Wrong email or password ("+e.code+")"; }
-    }
-    $("loginBtn").onclick=doLogin;
-    $("loginPass").addEventListener("keydown",e=>{ if(e.key==="Enter")doLogin(); });
-    $("logoutBtn").onclick=async()=>{ if(confirm("Log out?")){ await signOut(auth); location.reload(); } };
-
-    /* ================= MESSAGES ================= */
-    function dayLabel(d){
-      const today=new Date(), y=new Date(); y.setDate(today.getDate()-1);
-      if(d.toDateString()===today.toDateString()) return "Today";
-      if(d.toDateString()===y.toDateString()) return "Yesterday";
-      return d.toLocaleDateString([], {day:"numeric",month:"short",year:"numeric"});
-    }
-
-    function listenMessages(){
-      const q=query(collection(db,"messages"),orderBy("createdAt"),limit(200));
-      onSnapshot(q,snapshot=>{
-        const isFirst=firstLoad; firstLoad=false;
-        if(!isFirst) snapshot.docChanges().forEach(c=>{
-          const d=c.doc.data();
-          if(c.type==="added"&&!c.doc.metadata.hasPendingWrites&&d.uid!==myUid){ ding(); notify(d); if(d.heart) hearts(); }
-        });
-        chat.innerHTML="";
-        if(snapshot.empty){ galleryItems=[]; drawPin(null); chat.innerHTML='<div id="status">No messages yet ❤️</div>'; return; }
-
-        let lastDay=""; const dayMap={}; const media=[]; let pinNow=null;
-        snapshot.forEach(messageDoc=>{
-          const data=messageDoc.data();
-          const mine=data.uid===myUid;
-          if(data.pinned) pinNow={id:messageDoc.id,data};
-          const ts=data.createdAt&&data.createdAt.toDate?data.createdAt.toDate():null;
-
-          if(ts){
-            const day=ts.toDateString();
-            (dayMap[day]=dayMap[day]||new Set()).add(data.uid);
-            if(day!==lastDay){
-              lastDay=day;
-              const chip=document.createElement("div");
-              chip.className="dateChip";
-              const sp=document.createElement("span");
-              sp.textContent=dayLabel(ts);
-              chip.appendChild(sp);
-              chat.appendChild(chip);
-            }
-          }
-
-          const row=document.createElement("div");
-          row.className="row"+(mine?" my-row":"");
-          row.dataset.q=((data.text||"")+" "+(data.fileName||"")+" "+(data.name||"")).toLowerCase();
-          const message=document.createElement("div");
-          message.className="message"+(mine?" my-message":"");
-
-          const name=document.createElement("div");
-          name.className="name";
-          name.textContent=(data.pinned?"📌 ":"")+(data.name||"Unknown");
-          message.appendChild(name);
-
-          if(data.replyTo){
-            const qt=document.createElement("div");
-            qt.className="quote";
-            qt.textContent=data.replyTo.name+": "+data.replyTo.text;
-            message.appendChild(qt);
-          }
-
-          const type=data.type||"text";
-          if((type==="image"||type==="video")&&data.url) media.push({url:data.url,kind:type,name:data.name||"",t:ts?ts.getTime():0});
-          if(type==="image"){
-            const img=document.createElement("img");
-            img.className="media"; img.src=data.url; img.loading="lazy";
-            img.onclick=()=>window.open(data.url,"_blank");
-            img.onload=()=>{chat.scrollTop=chat.scrollHeight;};
-            message.appendChild(img);
-            message.appendChild(dlLink(data.url,"⬇️ Save"));
-          }else if(type==="video"){
-            const v=document.createElement("video");
-            v.className="media"; v.src=data.url; v.controls=true; v.preload="metadata"; v.playsInline=true;
-            message.appendChild(v);
-            message.appendChild(dlLink(data.url,"⬇️ Save"));
-          }else if(type==="snap"){
-            const sn=document.createElement("div");
-            sn.className="snap"; sn.dataset.id=messageDoc.id; sn.dataset.mine=mine?"1":"";
-            sn.onclick=()=>openSnap(data,messageDoc.id,mine);
-            message.appendChild(sn);
           }else if(type==="audio"){
-            const au=document.createElement("audio");
-            au.src=data.url; au.controls=true; au.preload="metadata";
-            message.appendChild(au);
-          }else if(type==="file"){
-            const a=document.createElement("a");
-            a.href=data.url; a.target="_blank"; a.rel="noopener";
-            a.textContent="📄 "+(data.fileName||"File");
-            message.appendChild(a);
-          }else{
-            const text=document.createElement("div");
-            text.textContent=data.text||"";
-            message.appendChild(text);
-          }
+            const audioContainer = document.createElement("div");
+            audioContainer.className = "audio-player-box";
 
-          if(ts){
-            const tm=document.createElement("div");
-            tm.className="time";
-            tm.textContent=(data.edited?"edited · ":"")+ts.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
-            if(mine){
-              const tk=document.createElement("span");
-              tk.className="tick"; tk.dataset.ts=ts.getTime();
-              tm.appendChild(tk);
-            }
-            message.appendChild(tm);
-          }
+            const au = document.createElement("audio");
+            au.src = data.url;
+            au.preload = "metadata";
 
-          const rc=document.createElement("div");
-          rc.className="react"; rc.dataset.id=messageDoc.id;
-          message.appendChild(rc);
-
-          let lpT=null, lpFired=false;
-          const lpStart=()=>{ lpFired=false; clearTimeout(lpT); lpT=setTimeout(()=>{ lpFired=true; if(navigator.vibrate) navigator.vibrate(15); openMsgMenu(messageDoc.id,data,mine); },480); };
-          const lpEnd=()=>clearTimeout(lpT);
-          message.addEventListener("touchstart",lpStart,{passive:true});
-          ["touchend","touchmove","touchcancel"].forEach(ev=>message.addEventListener(ev,lpEnd,{passive:true}));
-          message.addEventListener("contextmenu",e=>{ e.preventDefault(); lpFired=true; openMsgMenu(messageDoc.id,data,mine); });
-          message.onclick=e=>{
-            if(lpFired){ lpFired=false; return; }
-            if(["A","IMG","VIDEO","AUDIO"].includes(e.target.tagName)||e.target.closest(".snap")) return;
-            const now=Date.now();
-            if(lastTap.id===messageDoc.id&&now-lastTap.t<350){
-              clearTimeout(lastTap.timer); lastTap.id=null; toggleHeart(messageDoc.id); return;
-            }
-            lastTap={id:messageDoc.id,t:now,timer:setTimeout(()=>setReply(data),350)};
-          };
-          row.appendChild(message);
-
-          if(mine){
-            const del=document.createElement("button");
-            del.className="deleteBtn"; del.textContent="🗑️"; del.title="Delete message";
-            del.onclick=async()=>{
-              if(!confirm("Delete this message?")) return;
-              try{ await deleteDoc(doc(db,"messages",messageDoc.id)); }
-              catch(e){ alert("Delete failed: "+e.code); }
+            const speedBtn = document.createElement("button");
+            speedBtn.className = "speed-btn";
+            speedBtn.textContent = "1x";
+            
+            let speeds = [1, 1.5, 2];
+            let speedIdx = 0;
+            
+            speedBtn.onclick = () => {
+              speedIdx = (speedIdx + 1) % speeds.length;
+              au.playbackRate = speeds[speedIdx];
+              speedBtn.textContent = speeds[speedIdx] + "x";
             };
-            row.appendChild(del);
-          }
-          chat.appendChild(row);
-        });
-        chat.scrollTop=chat.scrollHeight;
-        galleryItems=media; drawPin(pinNow); if(!$("gallery").hidden) drawGallery();
-        updateTicks(); updateSnaps(); updateReacts(); updateStreak(dayMap); applySearch();
-        if(!document.hidden) setPresence({lastRead:Date.now()});
-      },error=>{ chat.innerHTML='<div id="status">Error: '+error.code+'</div>'; });
-    }
 
-    async function sendMessage(){
-      const text=input.value.trim();
-      if(!text||!myUid)return;
-      input.value="";
-      try{
-        await addMsg({type:"text",text});
-      }catch(e){ alert("Send failed: "+e.code); input.value=text; }
-    }
-    sendBtn.onclick=sendMessage;
-    input.addEventListener("keydown",e=>{ if(e.key==="Enter")sendMessage(); });
-
-    /* ================= PHOTO / VIDEO / FILE ================= */
-    attachBtn.onclick=()=>{
+            audioContainer.appendChild(au);
+            audioContainer.appendChild(speedBtn);
+            
+            const playPauseBtn = document.createElement("button");
+            playPauseBtn.className = "play-pause-btn";
+            playPauseBtn.textContent = "▶";
+            
+            playPauseBtn.onclick = () => {
+              if(au.paused){
+                au.play();
+                playPauseBtn.textContent = "⏸";
+              } else {
+                au.pause();
+                playPauseBtn.textContent = "▶";
+              }
+            };
+            
+            audioContainer.prepend(playPauseBtn);
+            message.appendChild(audioContainer);
+            message.appendChild(dlLink(data.url, "⬇️ Save"));
+n.onclick=()=>{
       if(!CLOUD_NAME||!UPLOAD_PRESET){ alert("Add your Cloudinary cloud name and upload preset in script.js first."); return; }
       fileInput.click();
     };
