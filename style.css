@@ -173,3 +173,16 @@ body.dark .chat{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http:/
 #micBtn.rec{background:#e53935}
 .inputArea:has(#messageInput:placeholder-shown) #sendBtn{display:none}
 .inputArea:has(#messageInput:not(:placeholder-shown)) #micBtn{display:none}
+
+/* ===== Reels ===== */
+#reels{z-index:12;background:#000;justify-content:flex-start;align-items:stretch}
+#reelFeed{position:absolute;inset:0;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch}
+.reel{position:relative;height:100dvh;scroll-snap-align:start;scroll-snap-stop:always;background:#000}
+.reel video{width:100%;height:100%;object-fit:cover;display:block}
+#reelTop{position:absolute;top:0;left:0;right:0;z-index:3;display:flex;align-items:center;justify-content:space-between;padding:calc(12px + env(safe-area-inset-top,0px)) 14px 14px;font-weight:700;font-size:20px;background:linear-gradient(rgba(0,0,0,.6),transparent)}
+.rb{width:40px;height:40px;border:0;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;font-size:22px;padding:0}
+.reelInfo{position:absolute;left:14px;right:84px;bottom:calc(28px + env(safe-area-inset-bottom,0px));text-shadow:0 1px 6px rgba(0,0,0,.8);font-size:15px;pointer-events:none}
+.reelInfo b{display:block;margin-bottom:4px}
+.reelSide{position:absolute;right:10px;bottom:calc(40px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:16px;align-items:center}
+.reelSide button{border:0;background:rgba(0,0,0,.4);color:#fff;border-radius:26px;min-width:50px;padding:10px;font-size:19px}
+.reelEmpty{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:#aaa;line-height:1.9;padding:20px}

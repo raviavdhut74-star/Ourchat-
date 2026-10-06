@@ -47,7 +47,7 @@
           localStorage.setItem("ourchat_name",myName);
         }
       }
-      if(!started){ started=true; listenMessages(); listenCalls(); listenPresence(); listenExtras(); }
+      if(!started){ started=true; listenMessages(); listenCalls(); listenPresence(); listenExtras(); listenReels(); }
     });
 
     async function doLogin(){
@@ -630,6 +630,100 @@
     document.addEventListener("click",e=>{
       if(!e.target.closest("#menu")&&e.target.id!=="menuBtn") $("menu").hidden=true;
     });
+
+    /* ================= REELS ================= */
+    let reelList=[], reelLikes={}, reelObs=null, reelsMuted=true;
+
+    function listenReels(){
+      onSnapshot(query(collection(db,"reels"),orderBy("createdAt","desc"),limit(30)),s=>{
+        reelList=[]; s.forEach(d=>reelList.push({id:d.id,...d.data()}));
+        if(!$("reels").hidden) drawReels();
+      },()=>{});
+      onSnapshot(collection(db,"reelLikes"),s=>{
+        reelLikes={};
+        s.forEach(d=>{ const r=d.data(); (reelLikes[r.reelId]=reelLikes[r.reelId]||{})[r.uid]=1; });
+        updateReelLikes();
+      },()=>{});
+    }
+
+    function drawReels(){
+      const feed=$("reelFeed"); feed.innerHTML="";
+      if(!reelList.length){
+        feed.innerHTML='<div class="reelEmpty">अजून reel नाही<br>वरचे ➕ दाबून पहिला व्हिडिओ टाका</div>';
+        return;
+      }
+      reelList.forEach(r=>{
+        const sec=document.createElement("section"); sec.className="reel";
+        const v=document.createElement("video");
+        v.src=(r.url||"").replace(/\.[a-z0-9]+$/i,".mp4");
+        v.loop=true; v.muted=reelsMuted; v.playsInline=true; v.preload="metadata";
+        v.onclick=()=>{ v.paused?v.play().catch(()=>{}):v.pause(); };
+        v.ondblclick=()=>toggleReelLike(r.id);
+
+        const info=document.createElement("div"); info.className="reelInfo";
+        const nm=document.createElement("b"); nm.textContent="@"+(r.name||"");
+        const cp=document.createElement("div"); cp.textContent=r.caption||"";
+        info.append(nm,cp);
+
+        const side=document.createElement("div"); side.className="reelSide";
+        const like=document.createElement("button"); like.className="rLike"; like.dataset.id=r.id;
+        like.onclick=()=>toggleReelLike(r.id);
+        const snd=document.createElement("button"); snd.className="rSnd";
+        snd.textContent=reelsMuted?"🔇":"🔊"; snd.onclick=toggleReelSound;
+        side.append(like,snd);
+        if(r.uid===myUid){
+          const del=document.createElement("button"); del.textContent="🗑️";
+          del.onclick=()=>{ if(confirm("हा reel delete करायचा?")) deleteDoc(doc(db,"reels",r.id)).catch(e=>alert("Delete failed: "+e.code)); };
+          side.appendChild(del);
+        }
+        sec.append(v,info,side); feed.appendChild(sec);
+      });
+      updateReelLikes(); observeReels();
+    }
+
+    function observeReels(){
+      if(reelObs) reelObs.disconnect();
+      reelObs=new IntersectionObserver(es=>es.forEach(e=>{
+        const v=e.target.querySelector("video");
+        if(e.isIntersecting&&e.intersectionRatio>.6) v.play().catch(()=>{}); else v.pause();
+      }),{root:$("reelFeed"),threshold:[0,.6,1]});
+      document.querySelectorAll(".reel").forEach(r=>reelObs.observe(r));
+    }
+
+    function toggleReelSound(){
+      reelsMuted=!reelsMuted;
+      document.querySelectorAll(".reel video").forEach(v=>{ v.muted=reelsMuted; });
+      document.querySelectorAll(".rSnd").forEach(b=>{ b.textContent=reelsMuted?"🔇":"🔊"; });
+    }
+
+    function toggleReelLike(id){
+      const has=reelLikes[id]&&reelLikes[id][myUid];
+      const ref=doc(db,"reelLikes",id+"_"+myUid);
+      (has?deleteDoc(ref):setDoc(ref,{reelId:id,uid:myUid})).catch(e=>alert("Like failed: "+e.code));
+    }
+    function updateReelLikes(){
+      document.querySelectorAll(".rLike").forEach(b=>{
+        const m=reelLikes[b.dataset.id]||{};
+        b.textContent=(m[myUid]?"❤️":"🤍")+" "+Object.keys(m).length;
+      });
+    }
+
+    $("reelsBtn").onclick=()=>{ $("reels").hidden=false; drawReels(); };
+    $("reelBack").onclick=()=>{ document.querySelectorAll(".reel video").forEach(v=>v.pause()); $("reels").hidden=true; };
+    $("reelAdd").onclick=()=>$("reelInput").click();
+    $("reelInput").onchange=async e=>{
+      const f=e.target.files[0]; e.target.value="";
+      if(!f||!myUid) return;
+      if(!f.type.startsWith("video/")){ alert("फक्त व्हिडिओ निवडा"); return; }
+      if(f.size>MAX_MB*1024*1024){ alert("Video "+MAX_MB+" MB पेक्षा मोठा आहे."); return; }
+      const cap=prompt("Caption (नको असेल तर रिकामे ठेवा)")||"";
+      $("reelAdd").style.opacity=.4;
+      try{
+        const url=await cloudUpload(f);
+        await addDoc(collection(db,"reels"),{url,caption:cap.slice(0,150),name:myName,uid:myUid,createdAt:serverTimestamp()});
+      }catch(err){ alert("Reel failed: "+(err.message||err)); }
+      $("reelAdd").style.opacity=1;
+    };
 
     /* ================= CLEAR CHAT FOR EVERYONE ================= */
     $("clearAllBtn").onclick=async()=>{
