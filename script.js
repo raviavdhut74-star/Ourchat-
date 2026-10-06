@@ -207,7 +207,7 @@
 
     /* ================= PHOTO / VIDEO / FILE ================= */
     attachBtn.onclick=()=>{
-      if(CLOUD_NAME==="irn5vnzr"){ alert("Pahile Cloudinary cloud name ani upload preset code madhe taka."); return; }
+      if(!CLOUD_NAME||!UPLOAD_PRESET){ alert("Pahile Cloudinary cloud name ani upload preset code madhe taka."); return; }
       fileInput.click();
     };
 
