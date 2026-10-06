@@ -1,7 +1,7 @@
 {
-  "name": "जिवलग",
-  "short_name": "जिवलग",
-  "description": "आपल्या दोघांचे खास चॅट",
+  "name": "Jivlag",
+  "short_name": "Jivlag",
+  "description": "Our private chat",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

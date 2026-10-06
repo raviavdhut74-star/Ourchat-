@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="mr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>जिवलग</title>
+  <title>Jivlag</title>
   <meta name="theme-color" content="#f6f4fa">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="manifest" href="manifest.json">
@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -35,18 +35,19 @@
   </svg>
 
   <div class="header">
-    <div class="avatar"><img src="icon-192.png" alt="जिवलग"></div>
+    <div class="avatar"><img src="icon-192.png" alt="Jivlag"></div>
     <div class="hinfo">
-      <div class="htitle">जिवलग <span id="streak"></span></div>
+      <div class="htitle">Jivlag <span id="streak"></span></div>
       <div id="sub"></div>
     </div>
     <div class="hactions">
-      <button id="searchBtn" class="ib" title="शोधा"><svg class="ic"><use href="#i-search"/></svg></button>
+      <button id="searchBtn" class="ib" title="Search"><svg class="ic"><use href="#i-search"/></svg></button>
       <button id="voiceBtn" class="ib" title="Voice call"><svg class="ic"><use href="#i-phone"/></svg></button>
       <button id="videoBtn" class="ib" title="Video call"><svg class="ic"><use href="#i-video"/></svg></button>
       <button id="menuBtn" class="ib" title="Menu"><svg class="ic"><use href="#i-more"/></svg></button>
     </div>
     <div id="menu" hidden>
+      <button id="notifBtn">🔔 Notifications</button>
       <button id="heartBtn">❤️ Miss you</button>
       <button id="darkBtn">🌙 Dark mode</button>
       <button id="deleteAllBtn">🗑️ Delete my messages</button>
@@ -56,22 +57,26 @@
   </div>
 
   <div id="searchBar" hidden>
-    <input id="searchInput" type="search" placeholder="संदेश शोधा…" autocomplete="off">
+    <input id="searchInput" type="search" placeholder="Search messages…" autocomplete="off">
     <span id="searchCount"></span>
-    <button id="searchClose" title="बंद करा">✕</button>
+    <button id="searchClose" title="Close">✕</button>
   </div>
 
   <div id="storyBar">
-    <div class="sItem" id="snapBtn"><div class="sCircle add"><svg class="ic"><use href="#i-camera"/></svg></div><span>स्नॅप</span></div>
-    <div class="sItem" id="addStory"><div class="sCircle add"><svg class="ic"><use href="#i-plus"/></svg></div><span>स्टोरी</span></div>
+    <div class="sItem" id="snapBtn"><div class="sCircle add"><svg class="ic"><use href="#i-camera"/></svg></div><span>Snap</span></div>
+    <div class="sItem" id="addStory"><div class="sCircle add"><svg class="ic"><use href="#i-plus"/></svg></div><span>Story</span></div>
     <div id="storyList"></div>
+  </div>
+
+  <div id="pinBar" hidden>
+    <span>📌</span><span id="pinText"></span><button id="pinX" title="Unpin">✕</button>
   </div>
 
   <div class="chat" id="chat"><div id="status">Connecting...</div></div>
 
   <div class="inputArea">
     <div class="pill">
-      <input type="text" id="messageInput" placeholder="संदेश लिहा…" autocomplete="off">
+      <input type="text" id="messageInput" placeholder="Message" autocomplete="off">
       <button id="attachBtn" title="Attach"><svg class="ic"><use href="#i-clip"/></svg></button>
       <button id="camBtn" title="Snap"><svg class="ic"><use href="#i-camera"/></svg></button>
     </div>
@@ -81,10 +86,10 @@
   </div>
 
   <nav id="nav">
-    <button id="navChat" class="on"><i><svg class="ic"><use href="#i-chat"/></svg></i>चॅट</button>
-    <button id="galBtn"><i><svg class="ic"><use href="#i-grid"/></svg></i>गॅलरी</button>
-    <button id="reelsBtn"><i><svg class="ic"><use href="#i-film"/></svg></i>रील्स</button>
-    <button id="postsBtn"><i><svg class="ic"><use href="#i-image"/></svg></i>पोस्ट्स</button>
+    <button id="navChat" class="on"><i><svg class="ic"><use href="#i-chat"/></svg></i>Chat</button>
+    <button id="galBtn"><i><svg class="ic"><use href="#i-grid"/></svg></i>Gallery</button>
+    <button id="reelsBtn"><i><svg class="ic"><use href="#i-film"/></svg></i>Reels</button>
+    <button id="postsBtn"><i><svg class="ic"><use href="#i-image"/></svg></i>Posts</button>
   </nav>
 
   <input type="file" id="snapInput" accept="image/*" capture="environment" hidden>
@@ -108,13 +113,13 @@
   <div id="gallery" class="overlay" hidden>
     <div id="galTop">
       <button id="galBack" class="rb">←</button>
-      <span>गॅलरी</span>
+      <span>Gallery</span>
       <span style="width:40px"></span>
     </div>
     <div id="galTabs">
-      <button data-f="all" class="on">सर्व</button>
-      <button data-f="image">फोटो</button>
-      <button data-f="video">व्हिडिओ</button>
+      <button data-f="all" class="on">All</button>
+      <button data-f="image">Photos</button>
+      <button data-f="video">Videos</button>
     </div>
     <div id="galFeed"></div>
   </div>
@@ -133,8 +138,19 @@
     <div id="cmHead"><b>Comments</b><button id="cmClose">✕</button></div>
     <div id="cmList"></div>
     <div id="cmForm">
-      <input id="cmInput" placeholder="Comment लिहा..." autocomplete="off">
+      <input id="cmInput" placeholder="Write a comment…" autocomplete="off">
       <button id="cmSend"><svg class="ic"><use href="#i-send"/></svg></button>
+    </div>
+  </div>
+  <div id="msgMenu" hidden>
+    <div id="mmSheet">
+      <button id="mmReply">↩️ Reply</button>
+      <button id="mmCopy">📋 Copy</button>
+      <button id="mmForward">➤ Forward</button>
+      <button id="mmPin">📌 Pin</button>
+      <button id="mmEdit">✏️ Edit</button>
+      <button id="mmDelete">🗑️ Delete</button>
+      <button id="mmCancel">Cancel</button>
     </div>
   </div>
   <div id="toast" hidden></div>
@@ -156,15 +172,15 @@
   <div id="loginBox" class="overlay">
     <div class="loginCard">
       <img class="loginLogo" src="icon-192.png" alt="">
-      <div class="loginTitle">जिवलग</div>
-      <input type="email" id="loginEmail" placeholder="ईमेल" autocomplete="username">
-      <input type="password" id="loginPass" placeholder="पासवर्ड" autocomplete="current-password">
-      <button id="loginBtn">लॉगिन</button>
+      <div class="loginTitle">Jivlag</div>
+      <input type="email" id="loginEmail" placeholder="Email" autocomplete="username">
+      <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
+      <button id="loginBtn">Log in</button>
       <div id="loginErr"></div>
     </div>
   </div>
 
-  <script type="module" src="script.js?v=11"></script>
+  <script type="module" src="script.js?v=12"></script>
   <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 </body>
 </html>

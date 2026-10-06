@@ -5,7 +5,7 @@
       onSnapshot, serverTimestamp, deleteDoc, doc, where, getDocs
     } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    // ===== Cloudinary (photo / video / file upload) — apla cloud name ani preset ithe taka =====
+    // ===== Cloudinary (photo / video / file upload) =====
     const CLOUD_NAME = "irn5vnzr";
     const UPLOAD_PRESET = "q5t0jb1h";
     const MAX_MB = 100;
@@ -43,7 +43,7 @@
       if(!myName){
         myName=localStorage.getItem("ourchat_name");
         if(!myName){
-          myName=(prompt("तुमचे नाव काय?")||"").trim()||"Me";
+          myName=(prompt("What is your name?")||"").trim()||"Me";
           localStorage.setItem("ourchat_name",myName);
         }
       }
@@ -55,11 +55,11 @@
       if(!em||!pw)return;
       $("loginErr").textContent="";
       try{ await signInWithEmailAndPassword(auth,em,pw); }
-      catch(e){ $("loginErr").textContent="Email kinva password chukicha aahe ("+e.code+")"; }
+      catch(e){ $("loginErr").textContent="Wrong email or password ("+e.code+")"; }
     }
     $("loginBtn").onclick=doLogin;
     $("loginPass").addEventListener("keydown",e=>{ if(e.key==="Enter")doLogin(); });
-    $("logoutBtn").onclick=async()=>{ if(confirm("Logout karaycha?")){ await signOut(auth); location.reload(); } };
+    $("logoutBtn").onclick=async()=>{ if(confirm("Log out?")){ await signOut(auth); location.reload(); } };
 
     /* ================= MESSAGES ================= */
     function dayLabel(d){
@@ -75,15 +75,16 @@
         const isFirst=firstLoad; firstLoad=false;
         if(!isFirst) snapshot.docChanges().forEach(c=>{
           const d=c.doc.data();
-          if(c.type==="added"&&!c.doc.metadata.hasPendingWrites&&d.uid!==myUid){ ding(); if(d.heart) hearts(); }
+          if(c.type==="added"&&!c.doc.metadata.hasPendingWrites&&d.uid!==myUid){ ding(); notify(d); if(d.heart) hearts(); }
         });
         chat.innerHTML="";
-        if(snapshot.empty){ galleryItems=[]; chat.innerHTML='<div id="status">अजून संदेश नाही ❤️</div>'; return; }
+        if(snapshot.empty){ galleryItems=[]; drawPin(null); chat.innerHTML='<div id="status">No messages yet ❤️</div>'; return; }
 
-        let lastDay=""; const dayMap={}; const media=[];
+        let lastDay=""; const dayMap={}; const media=[]; let pinNow=null;
         snapshot.forEach(messageDoc=>{
           const data=messageDoc.data();
           const mine=data.uid===myUid;
+          if(data.pinned) pinNow={id:messageDoc.id,data};
           const ts=data.createdAt&&data.createdAt.toDate?data.createdAt.toDate():null;
 
           if(ts){
@@ -108,7 +109,7 @@
 
           const name=document.createElement("div");
           name.className="name";
-          name.textContent=data.name||"Unknown";
+          name.textContent=(data.pinned?"📌 ":"")+(data.name||"Unknown");
           message.appendChild(name);
 
           if(data.replyTo){
@@ -155,7 +156,7 @@
           if(ts){
             const tm=document.createElement("div");
             tm.className="time";
-            tm.textContent=ts.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+            tm.textContent=(data.edited?"edited · ":"")+ts.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
             if(mine){
               const tk=document.createElement("span");
               tk.className="tick"; tk.dataset.ts=ts.getTime();
@@ -168,7 +169,14 @@
           rc.className="react"; rc.dataset.id=messageDoc.id;
           message.appendChild(rc);
 
+          let lpT=null, lpFired=false;
+          const lpStart=()=>{ lpFired=false; clearTimeout(lpT); lpT=setTimeout(()=>{ lpFired=true; if(navigator.vibrate) navigator.vibrate(15); openMsgMenu(messageDoc.id,data,mine); },480); };
+          const lpEnd=()=>clearTimeout(lpT);
+          message.addEventListener("touchstart",lpStart,{passive:true});
+          ["touchend","touchmove","touchcancel"].forEach(ev=>message.addEventListener(ev,lpEnd,{passive:true}));
+          message.addEventListener("contextmenu",e=>{ e.preventDefault(); lpFired=true; openMsgMenu(messageDoc.id,data,mine); });
           message.onclick=e=>{
+            if(lpFired){ lpFired=false; return; }
             if(["A","IMG","VIDEO","AUDIO"].includes(e.target.tagName)||e.target.closest(".snap")) return;
             const now=Date.now();
             if(lastTap.id===messageDoc.id&&now-lastTap.t<350){
@@ -191,7 +199,7 @@
           chat.appendChild(row);
         });
         chat.scrollTop=chat.scrollHeight;
-        galleryItems=media; if(!$("gallery").hidden) drawGallery();
+        galleryItems=media; drawPin(pinNow); if(!$("gallery").hidden) drawGallery();
         updateTicks(); updateSnaps(); updateReacts(); updateStreak(dayMap); applySearch();
         if(!document.hidden) setPresence({lastRead:Date.now()});
       },error=>{ chat.innerHTML='<div id="status">Error: '+error.code+'</div>'; });
@@ -210,7 +218,7 @@
 
     /* ================= PHOTO / VIDEO / FILE ================= */
     attachBtn.onclick=()=>{
-      if(CLOUD_NAME==="irn5vnzr"){ alert("Pahile Cloudinary cloud name ani upload preset code madhe taka."); return; }
+      if(!CLOUD_NAME||!UPLOAD_PRESET){ alert("Add your Cloudinary cloud name and upload preset in script.js first."); return; }
       fileInput.click();
     };
 
@@ -218,7 +226,7 @@
       const file=fileInput.files[0];
       fileInput.value="";
       if(!file||!myUid)return;
-      if(file.size>MAX_MB*1024*1024){ alert("File "+MAX_MB+" MB peksha motha aahe."); return; }
+      if(file.size>MAX_MB*1024*1024){ alert("File is larger than "+MAX_MB+" MB."); return; }
 
       setIcon(attachBtn,"busy"); attachBtn.disabled=true;
       try{
@@ -273,7 +281,7 @@
     async function startCall(video){
       if(pc||!myUid)return;
       try{ await setupMedia(video); }
-      catch(e){ alert("Mic/Camera permission milali nahi: "+e.name); return; }
+      catch(e){ alert("Mic/Camera permission denied: "+e.name); return; }
 
       showCallUI("Calling...");
       createPC();
@@ -312,7 +320,7 @@
       const {ref,data}=incomingCall;
       incomingCall=null; incoming.hidden=true;
       try{ await setupMedia(data.video); }
-      catch(e){ alert("Mic/Camera permission milali nahi: "+e.name); updateDoc(ref,{status:"declined"}); return; }
+      catch(e){ alert("Mic/Camera permission denied: "+e.name); updateDoc(ref,{status:"declined"}); return; }
 
       callRef=ref;
       showCallUI("Connecting...");
@@ -465,7 +473,7 @@
     };
 
     // dark mode
-    function applyDark(on){ document.body.classList.toggle("dark",on); $("darkBtn").textContent=on?"☀️ लाईट मोड":"🌙 डार्क मोड"; }
+    function applyDark(on){ document.body.classList.toggle("dark",on); $("darkBtn").textContent=on?"☀️ Light mode":"🌙 Dark mode"; }
     applyDark(localStorage.getItem("ourchat_dark")==="1");
     $("darkBtn").onclick=()=>{
       const on=!document.body.classList.contains("dark");
@@ -480,7 +488,7 @@
       if(!myUid)return;
       let st;
       try{ st=await navigator.mediaDevices.getUserMedia({audio:true}); }
-      catch(e){ alert("Mic permission milali nahi"); return; }
+      catch(e){ alert("Microphone permission denied"); return; }
       rec=new MediaRecorder(st); chunks=[];
       rec.ondataavailable=e=>chunks.push(e.data);
       rec.onstop=async()=>{
@@ -654,7 +662,7 @@
     function drawReels(){
       const feed=$("reelFeed"); feed.innerHTML="";
       if(!reelList.length){
-        feed.innerHTML='<div class="reelEmpty">अजून reel नाही<br>वरचे ➕ दाबून पहिला व्हिडिओ टाका</div>';
+        feed.innerHTML='<div class="reelEmpty">No reels yet<br>Tap ➕ above to add the first video</div>';
         return;
       }
       reelList.forEach(r=>{
@@ -678,7 +686,7 @@
         side.append(like,cmButton(r.id),actBtn("➤",()=>shareToChat({type:"video",url:mp4(r.url),text:r.caption||""})),dlLink(r.url),snd);
         if(r.uid===myUid){
           const del=document.createElement("button"); del.textContent="🗑️";
-          del.onclick=()=>{ if(confirm("हा reel delete करायचा?")) deleteDoc(doc(db,"reels",r.id)).catch(e=>alert("Delete failed: "+e.code)); };
+          del.onclick=()=>{ if(confirm("Delete this reel?")) deleteDoc(doc(db,"reels",r.id)).catch(e=>alert("Delete failed: "+e.code)); };
           side.appendChild(del);
         }
         sec.append(v,info,side); feed.appendChild(sec);
@@ -726,9 +734,9 @@
     $("reelInput").onchange=async e=>{
       const f=e.target.files[0]; e.target.value="";
       if(!f||!myUid) return;
-      if(!f.type.startsWith("video/")){ alert("फक्त व्हिडिओ निवडा"); return; }
-      if(f.size>MAX_MB*1024*1024){ alert("Video "+MAX_MB+" MB पेक्षा मोठा आहे."); return; }
-      const cap=prompt("Caption (नको असेल तर रिकामे ठेवा)")||"";
+      if(!f.type.startsWith("video/")){ alert("Please choose a video"); return; }
+      if(f.size>MAX_MB*1024*1024){ alert("Video is larger than "+MAX_MB+" MB."); return; }
+      const cap=prompt("Caption (leave empty for none)")||"";
       $("reelAdd").style.opacity=.4;
       try{
         const url=await cloudUpload(f);
@@ -747,7 +755,7 @@
       clearTimeout(toast.t); toast.t=setTimeout(()=>{ el.hidden=true; },2200);
     }
     function shareToChat(msg){
-      addMsg(msg).then(()=>toast("Chat मध्ये पाठवले ✅")).catch(e=>alert("Share failed: "+e.code));
+      addMsg(msg).then(()=>toast("Sent to chat ✅")).catch(e=>alert("Share failed: "+e.code));
     }
     function actBtn(txt,fn){ const b=document.createElement("button"); b.textContent=txt; b.onclick=fn; return b; }
     function cmButton(id){
@@ -775,7 +783,7 @@
     function drawPosts(){
       const feed=$("postFeed"); feed.innerHTML="";
       if(!postList.length){
-        feed.innerHTML='<div class="reelEmpty">अजून post नाही<br>वरचे ➕ दाबून पहिला फोटो टाका</div>';
+        feed.innerHTML='<div class="reelEmpty">No posts yet<br>Tap ➕ above to add the first photo</div>';
         return;
       }
       postList.forEach(p=>{
@@ -799,7 +807,7 @@
           actBtn("➤",()=>shareToChat(p.kind==="video"?{type:"video",url:mp4(p.url),text:""}:{type:"image",url:p.url,text:""})),
           dlLink(p.url));
         if(p.uid===myUid){
-          const del=actBtn("🗑️",()=>{ if(confirm("हा post delete करायचा?")) deleteDoc(doc(db,"posts",p.id)).catch(e=>alert("Delete failed: "+e.code)); });
+          const del=actBtn("🗑️",()=>{ if(confirm("Delete this post?")) deleteDoc(doc(db,"posts",p.id)).catch(e=>alert("Delete failed: "+e.code)); });
           del.style.marginLeft="auto"; act.appendChild(del);
         }
         c.append(h,m,act);
@@ -818,7 +826,7 @@
     function drawComments(){
       const box=$("cmList"); box.innerHTML="";
       const arr=comments[cmTarget]||[];
-      if(!arr.length){ box.innerHTML='<div class="cmEmpty">अजून comment नाही</div>'; return; }
+      if(!arr.length){ box.innerHTML='<div class="cmEmpty">No comments yet</div>'; return; }
       arr.forEach(c=>{
         const row=document.createElement("div"); row.className="cm";
         const b=document.createElement("b"); b.textContent=c.name||"";
@@ -851,17 +859,96 @@
       const f=e.target.files[0]; e.target.value="";
       if(!f||!myUid) return;
       const isV=f.type.startsWith("video/");
-      if(!isV&&!f.type.startsWith("image/")){ alert("फक्त फोटो किंवा व्हिडिओ निवडा"); return; }
-      if(f.size>MAX_MB*1024*1024){ alert("File "+MAX_MB+" MB पेक्षा मोठी आहे."); return; }
-      const cap=prompt("Caption (नको असेल तर रिकामे ठेवा)")||"";
+      if(!isV&&!f.type.startsWith("image/")){ alert("Please choose a photo or video"); return; }
+      if(f.size>MAX_MB*1024*1024){ alert("File is larger than "+MAX_MB+" MB."); return; }
+      const cap=prompt("Caption (leave empty for none)")||"";
       $("postAdd").style.opacity=.4;
       try{
         const url=await cloudUpload(f);
         await addDoc(collection(db,"posts"),{url,kind:isV?"video":"image",caption:cap.slice(0,200),name:myName,uid:myUid,createdAt:serverTimestamp()});
-        toast("Post टाकला ✅");
+        toast("Post added ✅");
       }catch(err){ alert("Post failed: "+(err.message||err)); }
       $("postAdd").style.opacity=1;
     };
+
+    /* ================= MESSAGE ACTIONS: reply / copy / forward / pin / edit / delete ================= */
+    let mmCur=null, pinCur=null;
+    function msgPreview(d){
+      const t=d.type||"text";
+      return t==="image"?"📷 Photo":t==="video"?"🎥 Video":t==="audio"?"🎤 Voice message":t==="file"?"📄 "+(d.fileName||"File"):t==="snap"?"📸 Snap":(d.text||"");
+    }
+    function openMsgMenu(id,d,mine){
+      mmCur={id,d,mine};
+      const isText=(d.type||"text")==="text";
+      $("mmEdit").hidden=!(mine&&isText&&!d.heart);
+      $("mmDelete").hidden=!mine;
+      $("mmCopy").hidden=!(isText||d.url);
+      $("mmForward").hidden=!(isText||d.url);
+      $("mmPin").textContent=d.pinned?"📌 Unpin":"📌 Pin";
+      $("msgMenu").hidden=false;
+    }
+    function closeMsgMenu(){ $("msgMenu").hidden=true; }
+    $("msgMenu").onclick=e=>{ if(e.target.id==="msgMenu") closeMsgMenu(); };
+    $("mmCancel").onclick=closeMsgMenu;
+    $("mmReply").onclick=()=>{ const c=mmCur; closeMsgMenu(); if(c) setReply(c.d); };
+    $("mmCopy").onclick=async()=>{
+      const c=mmCur; closeMsgMenu(); if(!c) return;
+      try{ await navigator.clipboard.writeText(c.d.text||c.d.url||""); toast("Copied ✅"); }catch(e){ toast("Copy failed"); }
+    };
+    $("mmForward").onclick=async()=>{
+      const c=mmCur; closeMsgMenu(); if(!c) return;
+      const text=c.d.text||"", url=c.d.url||"";
+      try{
+        if(navigator.share) await navigator.share(url?{title:"Jivlag",text,url}:{text});
+        else{ await navigator.clipboard.writeText((text+" "+url).trim()); toast("Copied — paste it anywhere ✅"); }
+      }catch(e){}
+    };
+    $("mmPin").onclick=async()=>{
+      const c=mmCur; closeMsgMenu(); if(!c) return;
+      try{
+        if(c.d.pinned){ await updateDoc(doc(db,"messages",c.id),{pinned:false}); }
+        else{
+          if(pinCur&&pinCur.id!==c.id) await updateDoc(doc(db,"messages",pinCur.id),{pinned:false});
+          await updateDoc(doc(db,"messages",c.id),{pinned:true});
+        }
+      }catch(e){ alert("Pin failed: "+e.code); }
+    };
+    $("mmEdit").onclick=async()=>{
+      const c=mmCur; closeMsgMenu(); if(!c) return;
+      const nt=prompt("Edit message",c.d.text||""); if(nt===null) return;
+      const t=nt.trim(); if(!t||t===c.d.text) return;
+      try{ await updateDoc(doc(db,"messages",c.id),{text:t,edited:true}); }catch(e){ alert("Edit failed: "+e.code); }
+    };
+    $("mmDelete").onclick=async()=>{
+      const c=mmCur; closeMsgMenu();
+      if(!c||!confirm("Delete this message?")) return;
+      try{ await deleteDoc(doc(db,"messages",c.id)); }catch(e){ alert("Delete failed: "+e.code); }
+    };
+    function drawPin(p){
+      pinCur=p;
+      if(!p){ $("pinBar").hidden=true; return; }
+      $("pinText").textContent=(p.data.name?p.data.name+": ":"")+msgPreview(p.data).slice(0,80);
+      $("pinBar").hidden=false;
+    }
+    $("pinBar").onclick=e=>{
+      if(e.target.id==="pinX"||!pinCur) return;
+      const el=chat.querySelector('.react[data-id="'+pinCur.id+'"]');
+      const row=el&&el.closest(".row");
+      if(row){ row.scrollIntoView({block:"center",behavior:"smooth"}); row.classList.add("flash"); setTimeout(()=>row.classList.remove("flash"),1400); }
+    };
+    $("pinX").onclick=()=>{ if(pinCur) updateDoc(doc(db,"messages",pinCur.id),{pinned:false}).catch(()=>{}); };
+
+    /* ================= NOTIFICATIONS (while the app is open or in the background) ================= */
+    $("notifBtn").onclick=async()=>{
+      if(!("Notification" in window)){ alert("This browser does not support notifications."); return; }
+      const p=await Notification.requestPermission();
+      toast(p==="granted"?"Notifications on ✅":"Notifications blocked");
+    };
+    function notify(d){
+      if(!document.hidden||!("Notification" in window)||Notification.permission!=="granted") return;
+      const body=d.heart?"❤️ Miss you!":msgPreview(d).slice(0,100);
+      if(navigator.serviceWorker) navigator.serviceWorker.ready.then(r=>r.showNotification(d.name||"Jivlag",{body,icon:"icon-192.png",badge:"icon-192.png",tag:"jivlag-msg"})).catch(()=>{});
+    }
 
     /* ================= SEARCH ================= */
     function applySearch(){
@@ -873,7 +960,7 @@
         if(hit&&q) n++;
       });
       chat.querySelectorAll(".dateChip").forEach(c=>c.classList.toggle("hide",!!q));
-      $("searchCount").textContent=q?(n?n+" सापडले":"काही सापडले नाही"):"";
+      $("searchCount").textContent=q?(n?n+" found":"No results"):"";
     }
     $("searchBtn").onclick=()=>{
       const bar=$("searchBar"); bar.hidden=!bar.hidden;
@@ -897,7 +984,7 @@
         if(p.url&&!seen.has(u)){ seen.add(u); all.push({url:u,kind:p.kind==="video"?"video":"image",name:p.name||"",t:p.createdAt&&p.createdAt.toMillis?p.createdAt.toMillis():0}); }
       });
       const list=all.filter(i=>galFilter==="all"||i.kind===galFilter).sort((a,b)=>b.t-a.t);
-      if(!list.length){ feed.innerHTML='<div class="galEmpty">अजून काही नाही<br>चॅटमध्ये फोटो किंवा व्हिडिओ पाठवा</div>'; return; }
+      if(!list.length){ feed.innerHTML='<div class="galEmpty">Nothing here yet<br>Send a photo or video in the chat</div>'; return; }
       list.forEach(it=>{
         const d=document.createElement("div"); d.className="gi"+(it.kind==="video"?" v":"");
         const im=document.createElement("img"); im.loading="lazy"; im.alt=""; im.src=galThumb(it);
@@ -919,8 +1006,8 @@
     /* ================= CLEAR CHAT FOR EVERYONE ================= */
     $("clearAllBtn").onclick=async()=>{
       if(!myUid) return;
-      if(!confirm("⚠️ दोघांचे सगळे messages सर्वांसाठी कायमचे delete होतील. पुढे जायचे?")) return;
-      if(!confirm("खरंच delete करायचे? हे परत मिळणार नाही.")) return;
+      if(!confirm("⚠️ All messages will be deleted for everyone, permanently. Continue?")) return;
+      if(!confirm("Really delete? This cannot be undone.")) return;
       try{
         const snapshot=await getDocs(collection(db,"messages"));
         await Promise.all(snapshot.docs.map(d=>deleteDoc(doc(db,"messages",d.id))));
@@ -930,7 +1017,7 @@
     /* ================= DELETE ALL ================= */
     deleteAllBtn.onclick=async()=>{
       if(!myUid)return;
-      if(!confirm("तुमचे सर्व messages delete करायचे आहेत?"))return;
+      if(!confirm("Delete all your messages?"))return;
       try{
         const q=query(collection(db,"messages"),where("uid","==",myUid));
         const snapshot=await getDocs(q);
