@@ -47,7 +47,7 @@
           localStorage.setItem("ourchat_name",myName);
         }
       }
-      if(!started){ started=true; listenMessages(); listenCalls(); listenPresence(); listenExtras(); listenReels(); }
+      if(!started){ started=true; listenMessages(); listenCalls(); listenPresence(); listenExtras(); listenReels(); listenPosts(); }
     });
 
     async function doLogin(){
@@ -124,10 +124,12 @@
             img.onclick=()=>window.open(data.url,"_blank");
             img.onload=()=>{chat.scrollTop=chat.scrollHeight;};
             message.appendChild(img);
+            message.appendChild(dlLink(data.url,"⬇️ Save"));
           }else if(type==="video"){
             const v=document.createElement("video");
             v.className="media"; v.src=data.url; v.controls=true; v.preload="metadata"; v.playsInline=true;
             message.appendChild(v);
+            message.appendChild(dlLink(data.url,"⬇️ Save"));
           }else if(type==="snap"){
             const sn=document.createElement("div");
             sn.className="snap"; sn.dataset.id=messageDoc.id; sn.dataset.mine=mine?"1":"";
@@ -632,7 +634,7 @@
     });
 
     /* ================= REELS ================= */
-    let reelList=[], reelLikes={}, reelObs=null, reelsMuted=true;
+    let reelList=[], reelLikes={}, reelObs=null, reelsMuted=false;
 
     function listenReels(){
       onSnapshot(query(collection(db,"reels"),orderBy("createdAt","desc"),limit(30)),s=>{
@@ -670,7 +672,7 @@
         like.onclick=()=>toggleReelLike(r.id);
         const snd=document.createElement("button"); snd.className="rSnd";
         snd.textContent=reelsMuted?"🔇":"🔊"; snd.onclick=toggleReelSound;
-        side.append(like,snd);
+        side.append(like,cmButton(r.id),actBtn("➤",()=>shareToChat({type:"video",url:mp4(r.url),text:r.caption||""})),dlLink(r.url),snd);
         if(r.uid===myUid){
           const del=document.createElement("button"); del.textContent="🗑️";
           del.onclick=()=>{ if(confirm("हा reel delete करायचा?")) deleteDoc(doc(db,"reels",r.id)).catch(e=>alert("Delete failed: "+e.code)); };
@@ -685,7 +687,14 @@
       if(reelObs) reelObs.disconnect();
       reelObs=new IntersectionObserver(es=>es.forEach(e=>{
         const v=e.target.querySelector("video");
-        if(e.isIntersecting&&e.intersectionRatio>.6) v.play().catch(()=>{}); else v.pause();
+        if(e.isIntersecting&&e.intersectionRatio>.6){
+          v.play().catch(()=>{
+            reelsMuted=true;
+            document.querySelectorAll(".reel video").forEach(x=>{ x.muted=true; });
+            document.querySelectorAll(".rSnd").forEach(b=>{ b.textContent="🔇"; });
+            v.play().catch(()=>{});
+          });
+        }else v.pause();
       }),{root:$("reelFeed"),threshold:[0,.6,1]});
       document.querySelectorAll(".reel").forEach(r=>reelObs.observe(r));
     }
@@ -723,6 +732,132 @@
         await addDoc(collection(db,"reels"),{url,caption:cap.slice(0,150),name:myName,uid:myUid,createdAt:serverTimestamp()});
       }catch(err){ alert("Reel failed: "+(err.message||err)); }
       $("reelAdd").style.opacity=1;
+    };
+
+    /* ================= POSTS / COMMENTS / SHARE / DOWNLOAD ================= */
+    let postList=[], comments={}, cmTarget=null;
+    const dlUrl=u=>(u||"").replace("/upload/","/upload/fl_attachment/");
+    const mp4=u=>(u||"").replace(/\.[a-z0-9]+$/i,".mp4");
+
+    function toast(t){
+      const el=$("toast"); el.textContent=t; el.hidden=false;
+      clearTimeout(toast.t); toast.t=setTimeout(()=>{ el.hidden=true; },2200);
+    }
+    function shareToChat(msg){
+      addMsg(msg).then(()=>toast("Chat मध्ये पाठवले ✅")).catch(e=>alert("Share failed: "+e.code));
+    }
+    function actBtn(txt,fn){ const b=document.createElement("button"); b.textContent=txt; b.onclick=fn; return b; }
+    function cmButton(id){
+      const b=actBtn("💬 "+(comments[id]||[]).length,()=>openComments(id));
+      b.className="cmBtn"; b.dataset.id=id; return b;
+    }
+    function dlLink(url,label){
+      const a=document.createElement("a");
+      a.className="dlBtn"; a.href=dlUrl(url); a.target="_blank"; a.rel="noopener";
+      a.textContent=label||"⬇️"; return a;
+    }
+
+    function listenPosts(){
+      onSnapshot(query(collection(db,"posts"),orderBy("createdAt","desc"),limit(30)),s=>{
+        postList=[]; s.forEach(d=>postList.push({id:d.id,...d.data()}));
+        if(!$("posts").hidden) drawPosts();
+      },()=>{});
+      onSnapshot(query(collection(db,"comments"),orderBy("createdAt"),limit(300)),s=>{
+        comments={};
+        s.forEach(d=>{ const c={id:d.id,...d.data()}; (comments[c.targetId]=comments[c.targetId]||[]).push(c); });
+        updateCmCounts(); if(cmTarget) drawComments();
+      },()=>{});
+    }
+
+    function drawPosts(){
+      const feed=$("postFeed"); feed.innerHTML="";
+      if(!postList.length){
+        feed.innerHTML='<div class="reelEmpty">अजून post नाही<br>वरचे ➕ दाबून पहिला फोटो टाका</div>';
+        return;
+      }
+      postList.forEach(p=>{
+        const c=document.createElement("article"); c.className="post";
+        const h=document.createElement("div"); h.className="pHead";
+        const av=document.createElement("span"); av.className="pAv"; av.textContent=(p.name||"?").charAt(0).toUpperCase();
+        const nm=document.createElement("b"); nm.textContent=p.name||"";
+        h.append(av,nm);
+
+        let m;
+        if(p.kind==="video"){
+          m=document.createElement("video"); m.src=mp4(p.url); m.controls=true; m.playsInline=true; m.preload="metadata";
+        }else{
+          m=document.createElement("img"); m.src=p.url; m.loading="lazy"; m.ondblclick=()=>toggleReelLike(p.id);
+        }
+        m.className="pMedia";
+
+        const act=document.createElement("div"); act.className="pAct";
+        const like=actBtn("",()=>toggleReelLike(p.id)); like.className="rLike"; like.dataset.id=p.id;
+        act.append(like,cmButton(p.id),
+          actBtn("➤",()=>shareToChat(p.kind==="video"?{type:"video",url:mp4(p.url),text:""}:{type:"image",url:p.url,text:""})),
+          dlLink(p.url));
+        if(p.uid===myUid){
+          const del=actBtn("🗑️",()=>{ if(confirm("हा post delete करायचा?")) deleteDoc(doc(db,"posts",p.id)).catch(e=>alert("Delete failed: "+e.code)); });
+          del.style.marginLeft="auto"; act.appendChild(del);
+        }
+        c.append(h,m,act);
+        if(p.caption){
+          const cp=document.createElement("div"); cp.className="pCap";
+          const b=document.createElement("b"); b.textContent=(p.name||"")+" ";
+          cp.append(b,document.createTextNode(p.caption)); c.appendChild(cp);
+        }
+        feed.appendChild(c);
+      });
+      updateReelLikes(); updateCmCounts();
+    }
+
+    // comments
+    function openComments(id){ cmTarget=id; $("cmSheet").hidden=false; drawComments(); }
+    function drawComments(){
+      const box=$("cmList"); box.innerHTML="";
+      const arr=comments[cmTarget]||[];
+      if(!arr.length){ box.innerHTML='<div class="cmEmpty">अजून comment नाही</div>'; return; }
+      arr.forEach(c=>{
+        const row=document.createElement("div"); row.className="cm";
+        const b=document.createElement("b"); b.textContent=c.name||"";
+        const t=document.createElement("span"); t.textContent=c.text||"";
+        row.append(b,t);
+        if(c.uid===myUid) row.appendChild(actBtn("✕",()=>deleteDoc(doc(db,"comments",c.id)).catch(()=>{})));
+        box.appendChild(row);
+      });
+      box.scrollTop=box.scrollHeight;
+    }
+    function updateCmCounts(){
+      document.querySelectorAll(".cmBtn").forEach(b=>{ b.textContent="💬 "+(comments[b.dataset.id]||[]).length; });
+    }
+    async function sendComment(){
+      const t=$("cmInput").value.trim();
+      if(!t||!cmTarget||!myUid) return;
+      $("cmInput").value="";
+      try{ await addDoc(collection(db,"comments"),{targetId:cmTarget,text:t.slice(0,300),name:myName,uid:myUid,createdAt:serverTimestamp()}); }
+      catch(e){ alert("Comment failed: "+e.code); }
+    }
+    $("cmSend").onclick=sendComment;
+    $("cmInput").addEventListener("keydown",e=>{ if(e.key==="Enter") sendComment(); });
+    $("cmClose").onclick=()=>{ $("cmSheet").hidden=true; cmTarget=null; };
+
+    // posts upload
+    $("postsBtn").onclick=()=>{ $("posts").hidden=false; drawPosts(); };
+    $("postBack").onclick=()=>{ $("posts").hidden=true; };
+    $("postAdd").onclick=()=>$("postInput").click();
+    $("postInput").onchange=async e=>{
+      const f=e.target.files[0]; e.target.value="";
+      if(!f||!myUid) return;
+      const isV=f.type.startsWith("video/");
+      if(!isV&&!f.type.startsWith("image/")){ alert("फक्त फोटो किंवा व्हिडिओ निवडा"); return; }
+      if(f.size>MAX_MB*1024*1024){ alert("File "+MAX_MB+" MB पेक्षा मोठी आहे."); return; }
+      const cap=prompt("Caption (नको असेल तर रिकामे ठेवा)")||"";
+      $("postAdd").style.opacity=.4;
+      try{
+        const url=await cloudUpload(f);
+        await addDoc(collection(db,"posts"),{url,kind:isV?"video":"image",caption:cap.slice(0,200),name:myName,uid:myUid,createdAt:serverTimestamp()});
+        toast("Post टाकला ✅");
+      }catch(err){ alert("Post failed: "+(err.message||err)); }
+      $("postAdd").style.opacity=1;
     };
 
     /* ================= CLEAR CHAT FOR EVERYONE ================= */
