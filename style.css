@@ -36,6 +36,7 @@ button:active{transform:scale(.92)}
 #deleteAllBtn,#clearAllBtn{color:#e5484d}
 
 /* search */
+#searchBar[hidden]{display:none}
 #searchBar{order:1;flex:none;display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--line)}
 #searchInput{flex:1;min-width:0;padding:9px 14px;border:1px solid var(--line);border-radius:20px;background:var(--bg);color:var(--text);font-size:15px;outline:none}
 #searchInput:focus{border-color:var(--accent)}
