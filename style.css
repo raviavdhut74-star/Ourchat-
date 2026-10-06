@@ -206,3 +206,4 @@ button:active{transform:scale(.92)}
 #mmSheet button[hidden]{display:none}
 #mmDelete{color:#e5484d}
 #mmCancel{text-align:center!important;color:var(--muted)!important;border-top:1px solid var(--line)!important;border-radius:0!important;margin-top:4px}
+.deleteBtn{display:none!important}
