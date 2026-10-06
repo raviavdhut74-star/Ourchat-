@@ -460,7 +460,7 @@
     };
 
     // dark mode
-    function applyDark(on){ document.body.classList.toggle("dark",on); $("darkBtn").textContent=on?"☀️":"🌙"; }
+    function applyDark(on){ document.body.classList.toggle("dark",on); $("darkBtn").textContent=on?"☀️ Light mode":"🌙 Dark mode"; }
     applyDark(localStorage.getItem("ourchat_dark")==="1");
     $("darkBtn").onclick=()=>{
       const on=!document.body.classList.contains("dark");
@@ -615,6 +615,13 @@
       while(ok(d)){ n++; d.setDate(d.getDate()-1); }
       $("streak").textContent=n?"🔥"+n:"";
     }
+
+    /* ================= MENU ================= */
+    $("menuBtn").onclick=()=>{ $("menu").hidden=!$("menu").hidden; };
+    $("menu").onclick=()=>{ $("menu").hidden=true; };
+    document.addEventListener("click",e=>{
+      if(!e.target.closest("#menu")&&e.target.id!=="menuBtn") $("menu").hidden=true;
+    });
 
     /* ================= CLEAR CHAT FOR EVERYONE ================= */
     $("clearAllBtn").onclick=async()=>{

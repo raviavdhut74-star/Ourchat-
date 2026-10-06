@@ -8,16 +8,22 @@
 </head>
 <body>
   <div class="header">
-    ❤️ Our Chat <span id="streak"></span>
-    <div id="sub"></div>
-    <div class="hbtns">
-      <button id="voiceBtn">📞</button>
-      <button id="videoBtn">🎥</button>
-      <button id="heartBtn" title="Miss you">❤️</button>
-      <button id="darkBtn" title="Dark mode">🌙</button>
-      <button id="deleteAllBtn" title="Delete all my messages">🗑️</button>
-      <button id="clearAllBtn" title="Clear chat for everyone">🧹</button>
-      <button id="logoutBtn">🚪</button>
+    <div class="avatar">❤️</div>
+    <div class="hinfo">
+      <div class="htitle">Our Chat <span id="streak"></span></div>
+      <div id="sub"></div>
+    </div>
+    <div class="hactions">
+      <button id="voiceBtn" class="ib" title="Voice call">📞</button>
+      <button id="videoBtn" class="ib" title="Video call">🎥</button>
+      <button id="menuBtn" class="ib" title="Menu">⋮</button>
+    </div>
+    <div id="menu" hidden>
+      <button id="heartBtn">❤️ Miss you</button>
+      <button id="darkBtn">🌙 Dark mode</button>
+      <button id="deleteAllBtn">🗑️ Delete my messages</button>
+      <button id="clearAllBtn">🧹 Clear chat for everyone</button>
+      <button id="logoutBtn">🚪 Logout</button>
     </div>
   </div>
 
@@ -34,7 +40,7 @@
     <button id="micBtn" title="Voice message">🎤</button>
     <input type="file" id="fileInput" hidden>
     <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off">
-    <button id="sendBtn">Send</button>
+    <button id="sendBtn" title="Send">➤</button>
   </div>
 
   <input type="file" id="snapInput" accept="image/*" capture="environment" hidden>
