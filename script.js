@@ -78,9 +78,9 @@
           if(c.type==="added"&&!c.doc.metadata.hasPendingWrites&&d.uid!==myUid){ ding(); if(d.heart) hearts(); }
         });
         chat.innerHTML="";
-        if(snapshot.empty){ chat.innerHTML='<div id="status">No messages yet ❤️</div>'; return; }
+        if(snapshot.empty){ galleryItems=[]; chat.innerHTML='<div id="status">अजून संदेश नाही ❤️</div>'; return; }
 
-        let lastDay=""; const dayMap={};
+        let lastDay=""; const dayMap={}; const media=[];
         snapshot.forEach(messageDoc=>{
           const data=messageDoc.data();
           const mine=data.uid===myUid;
@@ -102,6 +102,7 @@
 
           const row=document.createElement("div");
           row.className="row"+(mine?" my-row":"");
+          row.dataset.q=((data.text||"")+" "+(data.fileName||"")+" "+(data.name||"")).toLowerCase();
           const message=document.createElement("div");
           message.className="message"+(mine?" my-message":"");
 
@@ -118,6 +119,7 @@
           }
 
           const type=data.type||"text";
+          if((type==="image"||type==="video")&&data.url) media.push({url:data.url,kind:type,name:data.name||"",t:ts?ts.getTime():0});
           if(type==="image"){
             const img=document.createElement("img");
             img.className="media"; img.src=data.url; img.loading="lazy";
@@ -189,7 +191,8 @@
           chat.appendChild(row);
         });
         chat.scrollTop=chat.scrollHeight;
-        updateTicks(); updateSnaps(); updateReacts(); updateStreak(dayMap);
+        galleryItems=media; if(!$("gallery").hidden) drawGallery();
+        updateTicks(); updateSnaps(); updateReacts(); updateStreak(dayMap); applySearch();
         if(!document.hidden) setPresence({lastRead:Date.now()});
       },error=>{ chat.innerHTML='<div id="status">Error: '+error.code+'</div>'; });
     }
@@ -207,7 +210,7 @@
 
     /* ================= PHOTO / VIDEO / FILE ================= */
     attachBtn.onclick=()=>{
-      if(!CLOUD_NAME||!UPLOAD_PRESET){ alert("Pahile Cloudinary cloud name ani upload preset code madhe taka."); return; }
+      if(CLOUD_NAME==="irn5vnzr"){ alert("Pahile Cloudinary cloud name ani upload preset code madhe taka."); return; }
       fileInput.click();
     };
 
@@ -377,7 +380,7 @@
     };
 
     /* ================= EXTRAS ================= */
-    let firstLoad=true, other=null, replyTo=null, typingOn=false, tt=null, actx=null, rec=null, chunks=[];
+    let galleryItems=[], firstLoad=true, other=null, replyTo=null, typingOn=false, tt=null, actx=null, rec=null, chunks=[];
 
     function addMsg(o){
       const m={...o,name:myName,uid:myUid,createdAt:serverTimestamp()};
@@ -462,8 +465,8 @@
     };
 
     // dark mode
-    function applyDark(on){ document.body.classList.toggle("dark",on); $("darkBtn").textContent=on?"☀️ Light mode":"🌙 Dark mode"; }
-    applyDark(localStorage.getItem("ourchat_dark")!=="0");
+    function applyDark(on){ document.body.classList.toggle("dark",on); $("darkBtn").textContent=on?"☀️ लाईट मोड":"🌙 डार्क मोड"; }
+    applyDark(localStorage.getItem("ourchat_dark")==="1");
     $("darkBtn").onclick=()=>{
       const on=!document.body.classList.contains("dark");
       localStorage.setItem("ourchat_dark",on?"1":"0");
@@ -859,6 +862,59 @@
       }catch(err){ alert("Post failed: "+(err.message||err)); }
       $("postAdd").style.opacity=1;
     };
+
+    /* ================= SEARCH ================= */
+    function applySearch(){
+      const q=$("searchInput").value.trim().toLowerCase();
+      let n=0;
+      chat.querySelectorAll(".row").forEach(r=>{
+        const hit=!q||(r.dataset.q||"").includes(q);
+        r.classList.toggle("hide",!hit);
+        if(hit&&q) n++;
+      });
+      chat.querySelectorAll(".dateChip").forEach(c=>c.classList.toggle("hide",!!q));
+      $("searchCount").textContent=q?(n?n+" सापडले":"काही सापडले नाही"):"";
+    }
+    $("searchBtn").onclick=()=>{
+      const bar=$("searchBar"); bar.hidden=!bar.hidden;
+      if(bar.hidden){ $("searchInput").value=""; applySearch(); } else $("searchInput").focus();
+    };
+    $("searchClose").onclick=()=>{ $("searchBar").hidden=true; $("searchInput").value=""; applySearch(); };
+    $("searchInput").addEventListener("input",applySearch);
+
+    /* ================= GALLERY ================= */
+    let galFilter="all";
+    function galThumb(it){
+      let u=it.url.replace("/upload/",it.kind==="video"?"/upload/so_0,w_300,h_300,c_fill,q_auto/":"/upload/w_300,h_300,c_fill,q_auto/");
+      return it.kind==="video"?u.replace(/\.[a-z0-9]+$/i,".jpg"):u;
+    }
+    function drawGallery(){
+      const feed=$("galFeed"); feed.innerHTML="";
+      const seen=new Set(), all=[];
+      galleryItems.forEach(it=>{ if(!seen.has(it.url)){ seen.add(it.url); all.push(it); } });
+      postList.forEach(p=>{
+        const u=p.kind==="video"?mp4(p.url):p.url;
+        if(p.url&&!seen.has(u)){ seen.add(u); all.push({url:u,kind:p.kind==="video"?"video":"image",name:p.name||"",t:p.createdAt&&p.createdAt.toMillis?p.createdAt.toMillis():0}); }
+      });
+      const list=all.filter(i=>galFilter==="all"||i.kind===galFilter).sort((a,b)=>b.t-a.t);
+      if(!list.length){ feed.innerHTML='<div class="galEmpty">अजून काही नाही<br>चॅटमध्ये फोटो किंवा व्हिडिओ पाठवा</div>'; return; }
+      list.forEach(it=>{
+        const d=document.createElement("div"); d.className="gi"+(it.kind==="video"?" v":"");
+        const im=document.createElement("img"); im.loading="lazy"; im.alt=""; im.src=galThumb(it);
+        d.appendChild(im);
+        d.onclick=()=>{ if(it.kind==="video") window.open(it.url,"_blank"); else showViewer(it.url,"🖼️ "+it.name,0,null); };
+        feed.appendChild(d);
+      });
+    }
+    $("galBtn").onclick=()=>{ $("gallery").hidden=false; drawGallery(); };
+    $("galBack").onclick=()=>{ $("gallery").hidden=true; };
+    document.querySelectorAll("#galTabs button").forEach(b=>{
+      b.onclick=()=>{
+        galFilter=b.dataset.f;
+        document.querySelectorAll("#galTabs button").forEach(x=>x.classList.toggle("on",x===b));
+        drawGallery();
+      };
+    });
 
     /* ================= CLEAR CHAT FOR EVERYONE ================= */
     $("clearAllBtn").onclick=async()=>{
