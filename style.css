@@ -214,7 +214,8 @@ button:active{transform:scale(.92)}
 .logoT{font-size:26px;font-weight:700;background:var(--out);-webkit-background-clip:text;background-clip:text;color:transparent}
 #storyBar{order:0}
 .sCircle.seen{filter:grayscale(1);opacity:.6}
-#postFeed{display:block;padding-bottom:8px}
+#postFeed{position:static;inset:auto;overflow:visible;display:block;padding:0 0 8px}
+#postFeed .reelEmpty{height:auto;min-height:45vh}
 #chats{flex:1;min-height:0;overflow-y:auto}
 .ctitle{padding:calc(14px + env(safe-area-inset-top,0px)) 16px 8px;font-size:22px;font-weight:700}
 .cRow{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line)}
