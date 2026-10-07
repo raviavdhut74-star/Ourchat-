@@ -40,12 +40,21 @@
       <div class="logoT">Jivlag</div>
       <div class="hactions"><button id="topChats" class="ib"><svg class="ic"><use href="#i-send"/></svg></button><button id="menuBtn" class="ib"><svg class="ic"><use href="#i-more"/></svg></button></div>
       <div id="menu" hidden>
-        <button id="notifBtn">🔔 Notifications</button>
+        <button id="notifBtn">📲 Push alerts</button>
         <button id="heartBtn" style="display:none">❤️</button>
         <button id="galMenu">🖼️ Gallery</button>
         <button id="darkBtn">🌙 Dark mode</button>
         <button id="deleteAllBtn">🗑️ Delete my messages</button>
         <button id="clearAllBtn" style="display:none">x</button>
+        <button id="actMenu">🔔 Activity</button>
+        <button id="reqMenu">👥 Follow requests</button>
+        <button id="privBtn">🔒 Private account: Off</button>
+        <button id="cfMenu">💚 Close friends</button>
+        <button id="audBtn">📖 Story for: Everyone</button>
+        <button id="limMenu">🔕 Muted & restricted</button>
+        <button id="savedMenu">🔖 Saved</button>
+        <button id="histMenu">🕘 History</button>
+        <button id="blockMenu">🚫 Blocked accounts</button>
         <button id="logoutBtn">🚪 Logout</button>
       </div>
     </div>
@@ -58,11 +67,11 @@
   </div>
   <div id="chats" hidden><div class="ctitle">Chats</div><input id="userSearch" class="uSearch" placeholder="🔍 Search users" autocomplete="off" autocapitalize="none"><div id="chatList"></div><div class="ctitle">Calls</div><div id="callLog"></div></div>
   <div id="prof" hidden>
-    <div class="header igHead"><button id="profBack" class="ib" hidden>←</button><div class="logoT" id="profUser"></div><span class="verTag">build 68298</span></div>
+    <div class="header igHead"><button id="profBack" class="ib" hidden>←</button><div class="logoT" id="profUser"></div><span class="verTag">build 68311</span></div>
     <div class="pTop"><div class="bigAv" id="profAv"></div>
       <div class="pStats"><div><b id="stPosts">0</b>Posts</div><div><b id="stFollowers">0</b>Followers</div><div><b id="stFollowing">0</b>Following</div></div></div>
     <div class="pInfo"><b id="profNameShow"></b><div id="profBioShow"></div></div>
-    <div class="pBtns"><button id="profEdit">Edit profile</button><button id="profPhotoBtn">Change photo</button><button id="profFollow" hidden>Follow</button><button id="profMsg" hidden>Message</button></div>
+    <div class="pBtns"><button id="profEdit">Edit profile</button><button id="profPhotoBtn">Change photo</button><button id="profFollow" hidden>Follow</button><button id="profMsg" hidden>Message</button><button id="profBlock" hidden>Block</button><button id="profMore" hidden>⋯</button></div>
     <input type="file" id="profPhoto" accept="image/*" hidden>
     <div id="profForm" hidden><input id="profName" placeholder="Name" maxlength="30"><input id="profBio" placeholder="Bio" maxlength="80"><button id="profSave" class="saveBtn">Save</button></div>
     <div class="pTabs"><button id="tabPosts" class="on">▦ Posts</button><button id="tabReels">🎬 Reels</button></div>
@@ -203,7 +212,7 @@
     </div>
   </div>
 
-  <script type="module" src="script.js?v=1791500298"></script>
+  <script type="module" src="script.js?v=68311"></script>
   <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 </body>
 </html>

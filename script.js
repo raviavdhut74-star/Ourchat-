@@ -2,7 +2,7 @@
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail, deleteUser, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import {
       getFirestore, collection, addDoc, setDoc, updateDoc, query, orderBy, limit,
-      onSnapshot, serverTimestamp, deleteDoc, doc, where, getDocs
+      onSnapshot, serverTimestamp, deleteDoc, doc, where, getDocs, getDoc
     } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     // ===== Cloudinary (photo / video / file upload) =====
@@ -44,7 +44,7 @@
       myName=user.displayName||regName||localStorage.getItem("ourchat_name")||(user.email||"Me").split("@")[0];
       localStorage.setItem("ourchat_name",myName);
       setDoc(doc(db,"users",myUid),{uid:myUid,name:myName,email:user.email||""},{merge:true}).catch(()=>{});
-      if(!started){ started=true; listenUsers(); listenCalls(); listenFollows(); listenPresence(); listenCallLog(); listenExtras(); listenReels(); listenPosts(); }
+      if(!started){ started=true; listenUsers(); listenCalls(); listenFollows(); listenPresence(); listenCallLog(); listenExtras(); listenReels(); listenPosts(); listenBlocks(); listenMine(); listenSocial(); }
     });
 
     const keyOf=v=>{ v=v.trim().toLowerCase(); return /^[\d+\s-]{7,}$/.test(v)?v.replace(/\D/g,""):v.replace(/^@/,""); };
@@ -82,6 +82,366 @@
     $("loginPass").addEventListener("keydown",e=>{ if(e.key==="Enter")doLogin(); });
     $("logoutBtn").onclick=async()=>{ if(confirm("Log out?")){ await signOut(auth); location.reload(); } };
 
+
+    /* ================= BLOCK / SAVED / HISTORY ================= */
+    let myBlocks=new Set(), blockedMe=new Set(), savedMap={}, histList=[], hubMode="saved";
+    const isHidden=uid=>!!uid&&(myBlocks.has(uid)||blockedMe.has(uid));
+
+    function listenBlocks(){
+      onSnapshot(query(collection(db,"blocks"),where("by","==",myUid)),s=>{ myBlocks=new Set(); s.forEach(d=>myBlocks.add(d.data().who)); afterBlock(); },()=>{});
+      onSnapshot(query(collection(db,"blocks"),where("who","==",myUid)),s=>{ blockedMe=new Set(); s.forEach(d=>blockedMe.add(d.data().by)); afterBlock(); },()=>{});
+    }
+    function afterBlock(){
+      if(curPeer&&isHidden(curPeer.uid)) $("chatBack").click();
+      applyVis(); drawChats();
+      if(!$("reels").hidden) drawReels();
+      if(!$("prof").hidden) drawProf();
+      if(!$("hub").hidden) drawHub();
+    }
+
+    function listenMine(){
+      onSnapshot(query(collection(db,"users",myUid,"saved"),orderBy("at","desc"),limit(200)),s=>{
+        savedMap={}; s.forEach(d=>{ savedMap[d.id]=d.data(); }); refreshSaveBtns();
+      },()=>{});
+      onSnapshot(query(collection(db,"users",myUid,"history"),orderBy("at","desc"),limit(100)),s=>{
+        histList=[]; s.forEach(d=>histList.push({id:d.id,...d.data()})); if(!$("hub").hidden&&hubMode==="history") drawHub();
+      },()=>{});
+    }
+
+    const histSeen={};
+    function logHist(type,key,o){
+      if(!myUid||!key) return;
+      const id=type+"_"+key, now=Date.now();
+      if(histSeen[id]&&now-histSeen[id]<30000) return;
+      histSeen[id]=now;
+      setDoc(doc(db,"users",myUid,"history",id),{type,...o,at:now}).catch(()=>{});
+    }
+
+    function saveBtn(kind,p){
+      const b=actBtn(savedMap[p.id]?"✅":"🔖",()=>toggleSave(kind,p)); b.className="svBtn"; b.dataset.id=p.id; return b;
+    }
+    async function toggleSave(kind,p){
+      const ref=doc(db,"users",myUid,"saved",p.id);
+      try{
+        if(savedMap[p.id]){ await deleteDoc(ref); toast("Removed from saved"); }
+        else{ await setDoc(ref,{kind,url:p.url||"",mediaKind:kind==="reel"?"video":(p.kind||"image"),caption:p.caption||"",name:p.name||"",uid:p.uid||"",at:Date.now()}); toast("Saved 🔖"); }
+      }catch(e){ alert("Failed: "+e.code); }
+    }
+    function refreshSaveBtns(){
+      document.querySelectorAll(".svBtn").forEach(b=>{ b.textContent=savedMap[b.dataset.id]?"✅":"🔖"; });
+      if(!$("hub").hidden&&hubMode==="saved") drawHub();
+    }
+
+    // hub overlay (Saved / History / Blocked)
+    (function(){
+      const st=document.createElement("style");
+      st.textContent="#hub{position:fixed;inset:0;z-index:30;background:#fff;color:#111;display:flex;flex-direction:column}"+
+        "body.dark #hub{background:#121212;color:#eee}"+
+        "#hub[hidden]{display:none}"+
+        "#hub .hTop{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(128,128,128,.25);padding-top:calc(12px + env(safe-area-inset-top,0px))}"+
+        "#hub .hTop b{flex:1;font-size:17px}"+
+        "#hub .hTop button,#hub .hRow button{background:none;border:0;color:inherit;font-size:15px;cursor:pointer;padding:6px 8px}"+
+        "#hubBody{flex:1;overflow:auto;padding-bottom:env(safe-area-inset-bottom,0px)}"+
+        "#hub .sg{display:grid;grid-template-columns:repeat(3,1fr);gap:2px}"+
+        "#hub .sc{position:relative;aspect-ratio:1;background:#000;overflow:hidden}"+
+        "#hub .sc video,#hub .sc img{width:100%;height:100%;object-fit:cover;display:block}"+
+        "#hub .sc button{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.55);color:#fff;border:0;border-radius:50%;width:24px;height:24px}"+
+        "#hub .hRow{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(128,128,128,.15)}"+
+        "#hub .hRow .hm{flex:1;min-width:0}"+
+        "#hub .hRow .hm div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+
+        "#hub .hRow small{opacity:.6}"+
+        "#hub .hEmpty{text-align:center;padding:48px 20px;opacity:.6}";
+      document.head.appendChild(st);
+      const hub=document.createElement("div"); hub.id="hub"; hub.hidden=true;
+      hub.innerHTML='<div class="hTop"><button id="hubBack">←</button><b id="hubTitle"></b><button id="hubClear"></button></div><div id="hubBody"></div>';
+      document.body.appendChild(hub);
+      $("viewer").style.zIndex="999";
+    })();
+
+    function openHub(mode){ hubMode=mode; $("menu").hidden=true; $("hub").hidden=false; drawHub(); }
+    $("hubBack").onclick=()=>{ $("hub").hidden=true; };
+    $("savedMenu").onclick=()=>openHub("saved");
+    $("histMenu").onclick=()=>openHub("history");
+    $("blockMenu").onclick=()=>openHub("blocked");
+    $("hubClear").onclick=async()=>{
+      if(hubMode!=="history"||!histList.length) return;
+      if(!confirm("Clear all history?")) return;
+      await Promise.all(histList.map(h=>deleteDoc(doc(db,"users",myUid,"history",h.id)).catch(()=>{})));
+      Object.keys(histSeen).forEach(k=>delete histSeen[k]);
+    };
+    function playSaved(x){
+      const isVid=x.mediaKind==="video";
+      showViewer(isVid?mp4(x.url):x.url,(x.name?"@"+x.name+" ":"")+(x.caption||""),0,null,isVid);
+    }
+    function hubRow(main,sub,onClick,btnTxt,onBtn){
+      const r=document.createElement("div"); r.className="hRow";
+      const m=document.createElement("div"); m.className="hm";
+      const a=document.createElement("div"); a.textContent=main; const b=document.createElement("small"); b.textContent=sub||"";
+      m.append(a,b); if(onClick){ m.style.cursor="pointer"; m.onclick=onClick; }
+      const x=document.createElement("button"); x.textContent=btnTxt; x.onclick=onBtn;
+      r.append(m,x); return r;
+    }
+    function drawHub(){
+      const body=$("hubBody"); body.innerHTML="";
+      $("hubTitle").textContent=({saved:"🔖 Saved",history:"🕘 History",blocked:"🚫 Blocked accounts",requests:"👥 Follow requests",activity:"🔔 Activity",close:"💚 Close friends",limits:"🔕 Muted & restricted"})[hubMode]||"";
+      $("hubClear").textContent=hubMode==="history"?"Clear all":""; $("hubClear").hidden=hubMode!=="history";
+      if(drawHub2(body)) return;
+      if(hubMode==="saved"){
+        const items=Object.entries(savedMap).map(([id,v])=>({id,...v})).filter(x=>!isHidden(x.uid)).sort((a,b)=>b.at-a.at);
+        if(!items.length){ body.innerHTML='<div class="hEmpty">Nothing saved yet<br>Tap 🔖 on a post or reel</div>'; return; }
+        const g=document.createElement("div"); g.className="sg";
+        items.forEach(x=>{
+          const c=document.createElement("div"); c.className="sc";
+          let m;
+          if(x.mediaKind==="video"){ m=document.createElement("video"); m.src=mp4(x.url); m.muted=true; m.preload="metadata"; m.playsInline=true; }
+          else{ m=document.createElement("img"); m.src=x.url; m.loading="lazy"; }
+          c.onclick=()=>playSaved(x);
+          const d=document.createElement("button"); d.textContent="✕"; d.onclick=e=>{ e.stopPropagation(); deleteDoc(doc(db,"users",myUid,"saved",x.id)).catch(()=>{}); };
+          c.append(m,d); g.appendChild(c);
+        });
+        body.appendChild(g);
+      }else if(hubMode==="history"){
+        if(!histList.length){ body.innerHTML='<div class="hEmpty">No history yet</div>'; return; }
+        histList.filter(h=>!isHidden(h.uid)).forEach(h=>{
+          const t=new Date(h.at).toLocaleString([], {day:"numeric",month:"short",hour:"numeric",minute:"2-digit"});
+          let main,go;
+          if(h.type==="search"){ main="🔍 "+(h.text||""); go=()=>{ $("hub").hidden=true; showTab("chats"); $("userSearch").value=h.text||""; drawChats(); }; }
+          else if(h.type==="profile"){ main="👤 "+(h.name||"Profile"); go=()=>{ if(!usersMap[h.uid]) return; $("hub").hidden=true; profUid=h.uid; showTab("prof"); }; }
+          else{ main="🎬 "+(h.name?"@"+h.name+" ":"")+(h.caption||(h.kind==="reel"?"Reel":"Video")); go=()=>playSaved(h); }
+          body.appendChild(hubRow(main,t,go,"✕",()=>deleteDoc(doc(db,"users",myUid,"history",h.id)).catch(()=>{})));
+        });
+      }else{
+        const ids=[...myBlocks];
+        if(!ids.length){ body.innerHTML='<div class="hEmpty">You haven\'t blocked anyone</div>'; return; }
+        ids.forEach(id=>{
+          const u=usersMap[id]||{};
+          body.appendChild(hubRow(u.name||"Unknown",u.username?"@"+u.username:"",null,"Unblock",()=>deleteDoc(doc(db,"blocks",myUid+"_"+id)).catch(e=>alert("Failed: "+e.code))));
+        });
+      }
+    }
+
+    /* ================= PHASE 2: requests, close friends, mute/restrict/report, hashtags, activity ================= */
+    let reqIn=[], reqOut=new Set(), prefs={closeFriends:[],muted:[],restricted:[]}, notifList=[], notifFirst=true;
+    let closeRaw=[], storyBase=[], closeA=[], closeB=[], cLikes={}, cmReply=null, tagTok=0, notifTimer=null;
+    let storyAud=localStorage.getItem("jv_aud")||"all";
+    const isMuted=uid=>prefs.muted.includes(uid), isRestricted=uid=>prefs.restricted.includes(uid);
+
+    (function(){
+      const st=document.createElement("style");
+      st.textContent="#menu{max-height:75vh;overflow-y:auto}#menuBtn{position:relative}"+
+        "#menuBtn.dot::after{content:'';position:absolute;top:4px;right:4px;width:9px;height:9px;border-radius:50%;background:#ff3b5c}"+
+        ".actSheet{width:100%;background:#fff;color:#111;border-radius:16px 16px 0 0;padding:8px 0 calc(12px + env(safe-area-inset-bottom,0px))}"+
+        "body.dark .actSheet{background:#1e1e1e;color:#eee}"+
+        ".actSheet button{display:block;width:100%;background:none;border:0;color:inherit;font-size:16px;padding:14px 18px;text-align:left;cursor:pointer}"+
+        ".actSheet .at{padding:8px 18px;opacity:.6;font-size:13px}"+
+        ".tagGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-top:8px}"+
+        ".tagGrid .tc{position:relative;aspect-ratio:1;background:#000;overflow:hidden;cursor:pointer}"+
+        ".tagGrid .tc img,.tagGrid .tc video{width:100%;height:100%;object-fit:cover;display:block}";
+      document.head.appendChild(st);
+    })();
+
+    function actionSheet(title,items){
+      const o=document.createElement("div"); o.style.cssText="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);display:flex;align-items:flex-end";
+      const s=document.createElement("div"); s.className="actSheet";
+      const h=document.createElement("div"); h.className="at"; h.textContent=title; s.appendChild(h);
+      items.forEach(([t,fn])=>{ const b=document.createElement("button"); b.textContent=t; b.onclick=()=>{ o.remove(); fn(); }; s.appendChild(b); });
+      const c=document.createElement("button"); c.textContent="Cancel"; c.style.opacity=".6"; c.onclick=()=>o.remove(); s.appendChild(c);
+      o.onclick=e=>{ if(e.target===o) o.remove(); }; o.appendChild(s); document.body.appendChild(o);
+    }
+
+    function listenSocial(){
+      onSnapshot(query(collection(db,"followReqs"),where("to","==",myUid)),s=>{ reqIn=[]; s.forEach(d=>reqIn.push({id:d.id,...d.data()})); updateMenuLabels(); if(!$("hub").hidden&&hubMode==="requests") drawHub(); },()=>{});
+      onSnapshot(query(collection(db,"followReqs"),where("from","==",myUid)),s=>{ reqOut=new Set(); s.forEach(d=>reqOut.add(d.data().to)); if(!$("prof").hidden) drawProf(); },()=>{});
+      onSnapshot(doc(db,"userPrefs",myUid),d=>{
+        const x=d.exists()?d.data():{};
+        prefs={closeFriends:x.closeFriends||[],muted:x.muted||[],restricted:x.restricted||[]};
+        applyVis(); if(!$("reels").hidden) drawReels(); if(!$("prof").hidden) drawProf(); if(!$("hub").hidden) drawHub();
+      },()=>{});
+      const snapSt=s=>{ const a=[]; s.forEach(d=>{ const x=d.data(); const t=x.createdAt&&x.createdAt.toMillis?x.createdAt.toMillis():Date.now(); if(Date.now()-t<86400000) a.push({id:d.id,...x,t,close:true}); }); return a; };
+      const mergeClose=()=>{ closeRaw=closeA.concat(closeB); storyRaw=storyBase.concat(closeRaw); stories=storyRaw.filter(canSee); drawStories(); };
+      onSnapshot(query(collection(db,"closeStories"),where("cf","array-contains",myUid)),s=>{ closeA=snapSt(s); mergeClose(); },()=>{});
+      onSnapshot(query(collection(db,"closeStories"),where("uid","==",myUid)),s=>{ closeB=snapSt(s); mergeClose(); },()=>{});
+      onSnapshot(collection(db,"commentLikes"),s=>{
+        cLikes={}; s.forEach(d=>{ const r=d.data(); (cLikes[r.cid]=cLikes[r.cid]||{})[r.uid]=1; });
+        if(cmTarget&&!$("cmSheet").hidden) drawComments();
+      },()=>{});
+      onSnapshot(query(collection(db,"users",myUid,"notifs"),orderBy("at","desc"),limit(60)),s=>{
+        const first=notifFirst; notifFirst=false;
+        notifList=[]; s.forEach(d=>notifList.push({id:d.id,...d.data()}));
+        if(!first) s.docChanges().forEach(c=>{
+          if(c.type!=="added"||c.doc.metadata.hasPendingWrites) return;
+          const n=c.doc.data(); if(isHidden(n.from)||isRestricted(n.from)) return;
+          toast("🔔 "+notifText(n)); pushNotif(n);
+        });
+        updateMenuLabels(); if(!$("hub").hidden&&hubMode==="activity") drawHub();
+      },()=>{});
+    }
+
+    const notifText=n=>{
+      const w=n.fromName||"Someone";
+      return n.type==="follow"?w+" started following you":n.type==="request"?w+" requested to follow you":n.type==="accepted"?w+" accepted your follow request"
+        :n.type==="like"?w+" liked your post":n.type==="comment"?w+" commented: "+(n.text||""):n.type==="reply"?w+" replied: "+(n.text||"")
+        :n.type==="clike"?w+" liked your comment":w+" sent you an update";
+    };
+    function pushNotif(n){
+      if(!document.hidden||!("Notification" in window)||Notification.permission!=="granted"||!navigator.serviceWorker) return;
+      navigator.serviceWorker.ready.then(r=>r.showNotification("Jivlag",{body:notifText(n),icon:"icon-192.png",badge:"icon-192.png",tag:"jivlag-act"})).catch(()=>{});
+    }
+    function notifTo(to,type,extra){
+      if(!to||to===myUid||!myUid) return;
+      addDoc(collection(db,"users",to,"notifs"),{from:myUid,fromName:myName,type,at:Date.now(),read:false,...extra}).catch(()=>{});
+    }
+    function unreadCount(){ return notifList.filter(n=>!n.read&&!isHidden(n.from)).length; }
+    function updateMenuLabels(){
+      const u=unreadCount(), r=reqIn.filter(x=>!isHidden(x.from)).length;
+      $("actMenu").textContent="🔔 Activity"+(u?" ("+u+")":"");
+      $("reqMenu").textContent="👥 Follow requests"+(r?" ("+r+")":"");
+      $("menuBtn").classList.toggle("dot",u+r>0);
+      $("privBtn").textContent="🔒 Private account: "+(((usersMap[myUid]||{}).private)?"On":"Off");
+      $("audBtn").textContent="📖 Story for: "+(storyAud==="close"?"Close friends 💚":"Everyone");
+    }
+    $("menuBtn").addEventListener("click",updateMenuLabels);
+    function markNotifsRead(){
+      clearTimeout(notifTimer);
+      notifTimer=setTimeout(()=>{ notifList.filter(n=>!n.read).forEach(n=>updateDoc(doc(db,"users",myUid,"notifs",n.id),{read:true}).catch(()=>{})); },1500);
+    }
+
+    async function savePrefs(o){ try{ await setDoc(doc(db,"userPrefs",myUid),o,{merge:true}); }catch(e){ alert("Failed: "+e.code); } }
+    function togglePref(key,uid){
+      const cur=prefs[key]||[];
+      return savePrefs({[key]:cur.includes(uid)?cur.filter(x=>x!==uid):[...cur,uid]});
+    }
+    async function acceptReq(r){
+      try{
+        await setDoc(doc(db,"follows",r.from+"_"+myUid),{from:r.from,to:myUid});
+        await deleteDoc(doc(db,"followReqs",r.id));
+        notifTo(r.from,"accepted",{});
+      }catch(e){ alert("Failed: "+e.code); }
+    }
+
+    function reportThing(type,targetId,targetUid){
+      const r=prompt("Report reason:\n1 = Spam\n2 = Abusive / hate\n3 = Nudity\n4 = Scam / fake\n5 = Other");
+      const map={"1":"spam","2":"abusive","3":"nudity","4":"scam","5":"other"};
+      if(!r||!map[r.trim()]) return;
+      addDoc(collection(db,"reports"),{by:myUid,type,targetId,targetUid:targetUid||"",reason:map[r.trim()],at:Date.now()})
+        .then(()=>toast("Report sent. Thank you ✅")).catch(e=>alert("Report failed: "+e.code));
+    }
+    function rptBtn(kind,p){
+      if(p.uid===myUid) return document.createTextNode("");
+      const b=actBtn("🚩",()=>reportThing(kind,p.id,p.uid)); b.className="rptBtn"; return b;
+    }
+
+    // hashtags
+    const TAGRE="[\\p{L}\\p{M}\\p{N}_]+";
+    const tagsOf=t=>[...new Set((String(t||"").toLowerCase().match(new RegExp("#"+TAGRE,"gu"))||[]).map(x=>x.slice(1)))].slice(0,10);
+    function linkTags(el,text){
+      String(text||"").split(new RegExp("(#"+TAGRE+")","u")).forEach(part=>{
+        if(!part) return;
+        if(new RegExp("^#"+TAGRE+"$","u").test(part)){
+          const a=document.createElement("span"); a.textContent=part; a.style.cssText="color:#3b82f6;cursor:pointer";
+          a.onclick=e=>{ e.stopPropagation(); goTag(part); }; el.appendChild(a);
+        }else el.appendChild(document.createTextNode(part));
+      });
+    }
+    function goTag(t){
+      $("reels").hidden=true; $("hub").hidden=true; closeViewer();
+      showTab("chats"); $("userSearch").value=t; drawChats();
+    }
+    async function drawTags(tag){
+      const tok=++tagTok, box=$("chatList");
+      box.innerHTML='<div class="reelEmpty">Searching…</div>';
+      const items=[];
+      try{
+        const [a,b]=await Promise.all([
+          getDocs(query(collection(db,"posts"),where("tags","array-contains",tag),limit(30))),
+          getDocs(query(collection(db,"reels"),where("tags","array-contains",tag),limit(30)))]);
+        a.forEach(d=>items.push({id:d.id,...d.data()}));
+        b.forEach(d=>items.push({id:d.id,reel:true,...d.data()}));
+      }catch(e){}
+      postRaw.forEach(p=>{ if((p.caption||"").toLowerCase().includes("#"+tag)) items.push(p); });
+      reelList.forEach(r=>{ if((r.caption||"").toLowerCase().includes("#"+tag)) items.push({reel:true,...r}); });
+      if(tok!==tagTok) return;
+      const seen=new Set(), ok=x=>{
+        if(seen.has(x.id)||isHidden(x.uid)) return false; seen.add(x.id);
+        const u=usersMap[x.uid]||{};
+        return x.uid===myUid||!u.private||followsAll.some(f=>f.from===myUid&&f.to===x.uid);
+      };
+      const ms=x=>x.createdAt&&x.createdAt.toMillis?x.createdAt.toMillis():0;
+      const res=items.filter(ok).sort((a,b)=>ms(b)-ms(a));
+      box.innerHTML="";
+      const h=document.createElement("div"); h.className="reelEmpty"; h.textContent="#"+tag+" · "+res.length+" result"+(res.length===1?"":"s");
+      box.appendChild(h);
+      if(!res.length) return;
+      const g=document.createElement("div"); g.className="tagGrid";
+      res.forEach(x=>{
+        const isVid=x.reel||x.kind==="video", c=document.createElement("div"); c.className="tc";
+        let m; if(isVid){ m=document.createElement("video"); m.src=mp4(x.url); m.muted=true; m.preload="metadata"; m.playsInline=true; }
+        else{ m=document.createElement("img"); m.src=x.url; m.loading="lazy"; }
+        c.onclick=()=>playSaved({url:x.url,mediaKind:isVid?"video":"image",name:x.name||"",caption:x.caption||""});
+        c.appendChild(m); g.appendChild(c);
+      });
+      box.appendChild(g);
+    }
+
+    // menu + hub modes
+    $("reqMenu").onclick=()=>openHub("requests");
+    $("actMenu").onclick=()=>{ openHub("activity"); markNotifsRead(); };
+    $("cfMenu").onclick=()=>openHub("close");
+    $("limMenu").onclick=()=>openHub("limits");
+    $("privBtn").onclick=async()=>{
+      const cur=!!(usersMap[myUid]||{}).private;
+      try{ await setDoc(doc(db,"users",myUid),{private:!cur},{merge:true}); toast(!cur?"Account is now private 🔒":"Account is now public"); }
+      catch(e){ alert("Failed: "+e.code); }
+    };
+    $("audBtn").onclick=()=>{
+      storyAud=storyAud==="close"?"all":"close"; localStorage.setItem("jv_aud",storyAud); updateMenuLabels();
+      toast("New stories go to "+(storyAud==="close"?"Close friends 💚":"Everyone"));
+    };
+    function mkRow(main,sub,onClick,btns,bold){
+      const r=document.createElement("div"); r.className="hRow";
+      const m=document.createElement("div"); m.className="hm";
+      const a=document.createElement("div"); a.textContent=main; if(bold) a.style.fontWeight="700";
+      const b=document.createElement("small"); b.textContent=sub||"";
+      m.append(a,b); if(onClick){ m.style.cursor="pointer"; m.onclick=onClick; } r.appendChild(m);
+      btns.forEach(([t,f])=>{ const x=document.createElement("button"); x.textContent=t; x.onclick=f; r.appendChild(x); });
+      return r;
+    }
+    function drawHub2(body){
+      const openProf=uid=>()=>{ if(!usersMap[uid]) return; $("hub").hidden=true; profUid=uid; showTab("prof"); };
+      if(hubMode==="requests"){
+        const arr=reqIn.filter(r=>!isHidden(r.from));
+        if(!arr.length){ body.innerHTML='<div class="hEmpty">No follow requests</div>'; return true; }
+        arr.forEach(r=>{ const u=usersMap[r.from]||{};
+          body.appendChild(mkRow(u.name||"Unknown",u.username?"@"+u.username:"",openProf(r.from),[["Accept",()=>acceptReq(r)],["Decline",()=>deleteDoc(doc(db,"followReqs",r.id)).catch(()=>{})]])); });
+        return true;
+      }
+      if(hubMode==="activity"){
+        const arr=notifList.filter(n=>!isHidden(n.from)&&!isRestricted(n.from));
+        if(!arr.length){ body.innerHTML='<div class="hEmpty">No activity yet</div>'; return true; }
+        arr.forEach(n=>{
+          const t=new Date(n.at).toLocaleString([], {day:"numeric",month:"short",hour:"numeric",minute:"2-digit"});
+          const go=n.type==="request"?()=>openHub("requests"):n.url?()=>playSaved({url:n.url,mediaKind:n.mediaKind,name:"",caption:""}):openProf(n.from);
+          body.appendChild(mkRow(notifText(n),t,go,[["✕",()=>deleteDoc(doc(db,"users",myUid,"notifs",n.id)).catch(()=>{})]],!n.read));
+        });
+        return true;
+      }
+      if(hubMode==="close"){
+        const arr=Object.values(usersMap).filter(u=>u.uid&&u.uid!==myUid&&!isHidden(u.uid));
+        if(!arr.length){ body.innerHTML='<div class="hEmpty">No other users yet</div>'; return true; }
+        arr.forEach(u=>{ const on=prefs.closeFriends.includes(u.uid);
+          body.appendChild(mkRow(u.name||"Unknown",u.username?"@"+u.username:"",null,[[on?"💚 Added":"Add",()=>togglePref("closeFriends",u.uid)]])); });
+        return true;
+      }
+      if(hubMode==="limits"){
+        const rows=[...prefs.muted.map(id=>["muted",id]),...prefs.restricted.map(id=>["restricted",id])];
+        if(!rows.length){ body.innerHTML='<div class="hEmpty">No muted or restricted accounts</div>'; return true; }
+        rows.forEach(([k,id])=>{ const u=usersMap[id]||{};
+          body.appendChild(mkRow(u.name||"Unknown",k==="muted"?"Muted":"Restricted",null,[[k==="muted"?"Unmute":"Unrestrict",()=>togglePref(k,id)]])); });
+        return true;
+      }
+      return false;
+    }
+
     /* ================= MESSAGES ================= */
     function dayLabel(d){
       const today=new Date(), y=new Date(); y.setDate(today.getDate()-1);
@@ -98,7 +458,7 @@
         const isFirst=firstLoad; firstLoad=false;
         if(!isFirst) snapshot.docChanges().forEach(c=>{
           const d=c.doc.data();
-          if(c.type==="added"&&!c.doc.metadata.hasPendingWrites&&d.uid!==myUid){ ding(); notify(d); if(d.heart) hearts(); }
+          if(c.type==="added"&&!c.doc.metadata.hasPendingWrites&&d.uid!==myUid&&!isRestricted(d.uid)){ ding(); notify(d); if(d.heart) hearts(); }
         });
         chat.innerHTML="";
         if(snapshot.empty){ galleryItems=[]; drawPin(null); chat.innerHTML='<div id="status">No messages yet ❤️</div>'; return; }
@@ -226,7 +586,7 @@
       input.value="";
       try{
         await addMsg({type:"text",text});
-      }catch(e){ alert("Send failed: "+e.code); input.value=text; }
+      }catch(e){ alert(e.code==="blocked"||e.code==="permission-denied"?"You can't send messages to this account.":"Send failed: "+e.code); input.value=text; }
     }
     sendBtn.onclick=sendMessage;
     input.addEventListener("keydown",e=>{ if(e.key==="Enter")sendMessage(); });
@@ -416,6 +776,7 @@
 
     function addMsg(o){
       if(!curChat) return Promise.reject({code:"open a chat first"});
+      if(curPeer&&isHidden(curPeer.uid)) return Promise.reject({code:"blocked"});
       const m={...o,chatId:curChat,name:myName,uid:myUid,createdAt:serverTimestamp()};
       if(replyTo){ m.replyTo=replyTo; clearReply(); }
       return addDoc(collection(db,"messages"),m);
@@ -562,6 +923,7 @@
           const t=x.createdAt&&x.createdAt.toMillis?x.createdAt.toMillis():Date.now();
           if(Date.now()-t<86400000) storyRaw.push({id:d.id,...x,t});
         });
+        storyBase=storyRaw.slice(); storyRaw=storyBase.concat(closeRaw);
         stories=storyRaw.filter(canSee);
         drawStories();
       },()=>{});
@@ -617,27 +979,30 @@
     $("storyInput").onchange=async e=>{
       const f=e.target.files[0]; e.target.value="";
       if(!f||!myUid) return;
+      if(storyAud==="close"&&!prefs.closeFriends.length){ alert("Add some close friends first (menu → 💚 Close friends)"); return; }
       $("addStory").style.opacity=.4;
       try{
         const isV=f.type.startsWith("video/");
         if(!isV&&!f.type.startsWith("image/")){ alert("Please choose a photo or video"); $("addStory").style.opacity=1; return; }
         if(f.size>MAX_MB*1024*1024){ alert("File is larger than "+MAX_MB+" MB."); $("addStory").style.opacity=1; return; }
         const url=await cloudUpload(f);
-        await addDoc(collection(db,"stories"),{url,kind:isV?"video":"image",name:myName,uid:myUid,createdAt:serverTimestamp()});
+        const sd={url,kind:isV?"video":"image",name:myName,uid:myUid,createdAt:serverTimestamp()};
+        if(storyAud==="close") await addDoc(collection(db,"closeStories"),{...sd,cf:prefs.closeFriends.slice()});
+        else await addDoc(collection(db,"stories"),sd);
       }catch(err){ alert("Story failed: "+(err.message||err)); }
       $("addStory").style.opacity=1;
     };
     let seenSt=new Set(JSON.parse(localStorage.getItem("jv_seen")||"[]"));
     function drawStories(){
       const box=$("storyList"); box.innerHTML="";
-      const g={}; stories.slice().sort((a,b)=>a.t-b.t).forEach(x=>(g[x.uid]=g[x.uid]||[]).push(x));
+      const g={}; stories.filter(x=>!isMuted(x.uid)).sort((a,b)=>a.t-b.t).forEach(x=>(g[x.uid]=g[x.uid]||[]).push(x));
       Object.values(g).sort((a,b)=>(b[0].uid===myUid)-(a[0].uid===myUid)).forEach(arr=>{
         const f=arr[arr.length-1], all=arr.every(x=>seenSt.has(x.id));
         const it=document.createElement("div"); it.className="sItem";
         const c=document.createElement("div"); c.className="sCircle sRing"+(all?" seen":"");
         const th=f.kind==="video"?f.url.replace("/upload/","/upload/so_0,w_200,h_200,c_fill/").replace(/\.[a-z0-9]+$/i,".jpg"):f.url;
         c.style.setProperty("--img","url('"+th+"')");
-        const n=document.createElement("span"); n.textContent=f.uid===myUid?"You":(f.name||"");
+        const n=document.createElement("span"); n.textContent=(arr.some(x=>x.close)?"💚 ":"")+(f.uid===myUid?"You":(f.name||""));
         it.append(c,n); it.onclick=()=>playStory(arr,0); box.appendChild(it);
       });
     }
@@ -647,7 +1012,7 @@
       const x=arr[i]; seenSt.add(x.id); localStorage.setItem("jv_seen",JSON.stringify([...seenSt].slice(-300)));
       const isV=x.kind==="video";
       clearTimeout(vTimer);
-      showViewer(isV?mp4(x.url):x.url,"📖 "+(x.name||"")+" · "+new Date(x.t).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+"  ("+(i+1)+"/"+arr.length+")",0,x.uid===myUid?()=>deleteDoc(doc(db,"stories",x.id)):null,isV);
+      showViewer(isV?mp4(x.url):x.url,"📖 "+(x.name||"")+" · "+new Date(x.t).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+"  ("+(i+1)+"/"+arr.length+")",0,x.uid===myUid?()=>deleteDoc(doc(db,x.close?"closeStories":"stories",x.id)):null,isV);
       $("viewer").onclick=e=>{ if(e.target.id!=="viewDel"&&e.target.id!=="viewVid") playStory(arr,i+1); };
       if(isV){ $("viewVid").onended=()=>playStory(arr,i+1); vTimer=setTimeout(()=>playStory(arr,i+1),120000); }
       else vTimer=setTimeout(()=>playStory(arr,i+1),5000);
@@ -710,8 +1075,8 @@
         feed.innerHTML='<div class="reelEmpty">No reels yet<br>Tap ➕ above to add the first video</div>';
         return;
       }
-      reelList.forEach(r=>{
-        const sec=document.createElement("section"); sec.className="reel";
+      reelList.filter(r=>!isHidden(r.uid)&&!isMuted(r.uid)).forEach(r=>{
+        const sec=document.createElement("section"); sec.className="reel"; sec.dataset.id=r.id;
         const v=document.createElement("video");
         v.src=(r.url||"").replace(/\.[a-z0-9]+$/i,".mp4");
         v.loop=true; v.muted=reelsMuted; v.playsInline=true; v.preload="metadata";
@@ -720,7 +1085,7 @@
 
         const info=document.createElement("div"); info.className="reelInfo";
         const nm=document.createElement("b"); nm.textContent="@"+(r.name||"");
-        const cp=document.createElement("div"); cp.textContent=r.caption||"";
+        const cp=document.createElement("div"); linkTags(cp,r.caption);
         info.append(nm,cp);
 
         const side=document.createElement("div"); side.className="reelSide";
@@ -728,7 +1093,7 @@
         like.onclick=()=>toggleReelLike(r.id);
         const snd=document.createElement("button"); snd.className="rSnd";
         snd.textContent=reelsMuted?"🔇":"🔊"; snd.onclick=toggleReelSound;
-        side.append(like,cmButton(r.id),actBtn("➤",()=>shareToChat({type:"video",url:mp4(r.url),text:r.caption||""})),dlLink(r.url),snd);
+        side.append(like,cmButton(r.id),actBtn("➤",()=>shareToChat({type:"video",url:mp4(r.url),text:r.caption||""})),dlLink(r.url),saveBtn("reel",r),rptBtn("reel",r),snd);
         if(r.uid===myUid){
           const del=document.createElement("button"); del.textContent="🗑️";
           del.onclick=()=>{ if(confirm("Delete this reel?")) deleteDoc(doc(db,"reels",r.id)).catch(e=>alert("Delete failed: "+e.code)); };
@@ -744,6 +1109,7 @@
       reelObs=new IntersectionObserver(es=>es.forEach(e=>{
         const v=e.target.querySelector("video");
         if(e.isIntersecting&&e.intersectionRatio>.6){
+          const rr=reelList.find(x=>x.id===e.target.dataset.id); if(rr) logHist("watch",rr.id,{kind:"reel",mediaKind:"video",url:rr.url,name:rr.name||"",caption:rr.caption||"",uid:rr.uid||""});
           v.play().catch(()=>{
             reelsMuted=true;
             document.querySelectorAll(".reel video").forEach(x=>{ x.muted=true; });
@@ -765,6 +1131,12 @@
       const has=reelLikes[id]&&reelLikes[id][myUid];
       const ref=doc(db,"reelLikes",id+"_"+myUid);
       (has?deleteDoc(ref):setDoc(ref,{reelId:id,uid:myUid})).catch(e=>alert("Like failed: "+e.code));
+      const it=postRaw.find(p=>p.id===id)||reelList.find(r=>r.id===id);
+      if(it&&it.uid&&it.uid!==myUid){
+        const nid="like_"+id+"_"+myUid, nref=doc(db,"users",it.uid,"notifs",nid);
+        if(has) deleteDoc(nref).catch(()=>{});
+        else setDoc(nref,{from:myUid,fromName:myName,type:"like",at:Date.now(),read:false,url:it.url||"",mediaKind:it.kind||"video",targetId:id}).catch(()=>{});
+      }
     }
     function updateReelLikes(){
       document.querySelectorAll(".rLike").forEach(b=>{
@@ -785,7 +1157,7 @@
       $("reelAdd").style.opacity=.4;
       try{
         const url=await cloudUpload(f);
-        await addDoc(collection(db,"reels"),{url,caption:cap.slice(0,150),name:myName,uid:myUid,createdAt:serverTimestamp()});
+        await addDoc(collection(db,"reels"),{url,caption:cap.slice(0,150),tags:tagsOf(cap.slice(0,150)),name:myName,uid:myUid,createdAt:serverTimestamp()});
       }catch(err){ alert("Reel failed: "+(err.message||err)); }
       $("reelAdd").style.opacity=1;
     };
@@ -793,7 +1165,7 @@
     /* ================= POSTS / COMMENTS / SHARE / DOWNLOAD ================= */
     let postList=[], postRaw=[], storyRaw=[], comments={}, cmTarget=null;
     // visibility: author's posts/stories are seen only by the author and by people who follow the author
-    const canSee=x=>x.uid===myUid||followsAll.some(f=>f.from===myUid&&f.to===x.uid);
+    const canSee=x=>!isHidden(x.uid)&&(x.close||x.uid===myUid||followsAll.some(f=>f.from===myUid&&f.to===x.uid));
     function applyVis(){
       postList=postRaw.filter(canSee); stories=storyRaw.filter(canSee);
       drawPosts(); drawStories();
@@ -828,7 +1200,7 @@
       },()=>{});
       onSnapshot(query(collection(db,"comments"),orderBy("createdAt"),limit(300)),s=>{
         comments={};
-        s.forEach(d=>{ const c={id:d.id,...d.data()}; (comments[c.targetId]=comments[c.targetId]||[]).push(c); });
+        s.forEach(d=>{ const c={id:d.id,...d.data()}; if(isHidden(c.uid)) return; (comments[c.targetId]=comments[c.targetId]||[]).push(c); });
         updateCmCounts(); if(cmTarget) drawComments();
       },()=>{});
     }
@@ -839,7 +1211,7 @@
         feed.innerHTML='<div class="reelEmpty">No posts yet<br>Tap ➕ Post below to add the first photo</div>';
         return;
       }
-      postList.forEach(p=>{
+      postList.filter(p=>!isMuted(p.uid)).forEach(p=>{
         const c=document.createElement("article"); c.className="post";
         const h=document.createElement("div"); h.className="pHead";
         const av=document.createElement("span"); av.className="pAv"; av.textContent=(p.name||"?").charAt(0).toUpperCase();
@@ -848,7 +1220,7 @@
 
         let m;
         if(p.kind==="video"){
-          m=document.createElement("video"); m.src=mp4(p.url); m.controls=true; m.playsInline=true; m.preload="metadata";
+          m=document.createElement("video"); m.src=mp4(p.url); m.controls=true; m.playsInline=true; m.preload="metadata"; m.onplay=()=>logHist("watch",p.id,{kind:"post",mediaKind:"video",url:p.url,name:p.name||"",caption:p.caption||"",uid:p.uid||""});
         }else{
           m=document.createElement("img"); m.src=p.url; m.loading="lazy"; m.ondblclick=()=>toggleReelLike(p.id);
         }
@@ -858,7 +1230,7 @@
         const like=actBtn("",()=>toggleReelLike(p.id)); like.className="rLike"; like.dataset.id=p.id;
         act.append(like,cmButton(p.id),
           actBtn("➤",()=>shareToChat(p.kind==="video"?{type:"video",url:mp4(p.url),text:""}:{type:"image",url:p.url,text:""})),
-          dlLink(p.url));
+          dlLink(p.url),saveBtn("post",p),rptBtn("post",p));
         if(p.uid===myUid){
           const del=actBtn("🗑️",()=>{ if(confirm("Delete this?")) deleteDoc(doc(db,profTab==="reels"?"reels":"posts",p.id)).catch(e=>alert("Delete failed: "+e.code)); });
           del.style.marginLeft="auto"; act.appendChild(del);
@@ -867,7 +1239,7 @@
         if(p.caption){
           const cp=document.createElement("div"); cp.className="pCap";
           const b=document.createElement("b"); b.textContent=(p.name||"")+" ";
-          cp.append(b,document.createTextNode(p.caption)); c.appendChild(cp);
+          cp.append(b); linkTags(cp,p.caption); c.appendChild(cp);
         }
         feed.appendChild(c);
       });
@@ -875,20 +1247,31 @@
     }
 
     // comments
-    function openComments(id){ cmTarget=id; $("cmSheet").hidden=false; drawComments(); }
+    function openComments(id){ cmTarget=id; cmReply=null; $("cmInput").placeholder="Write a comment…"; $("cmSheet").hidden=false; drawComments(); }
     function drawComments(){
       const box=$("cmList"); box.innerHTML="";
-      const arr=comments[cmTarget]||[];
-      if(!arr.length){ box.innerHTML='<div class="cmEmpty">No comments yet</div>'; return; }
-      arr.forEach(c=>{
-        const row=document.createElement("div"); row.className="cm";
+      const vis=c=>!isHidden(c.uid)&&(c.uid===myUid||!isRestricted(c.uid));
+      const all=(comments[cmTarget]||[]).filter(vis);
+      const tops=all.filter(c=>!c.parentId);
+      if(!tops.length){ box.innerHTML='<div class="cmEmpty">No comments yet</div>'; return; }
+            const mk=(c,isReply)=>{
+        const row=document.createElement("div"); row.className="cm"; if(isReply) row.style.marginLeft="28px";
         const b=document.createElement("b"); b.textContent=c.name||"";
         const t=document.createElement("span"); t.textContent=c.text||"";
         row.append(b,t);
-        if(c.uid===myUid) row.appendChild(actBtn("✕",()=>deleteDoc(doc(db,"comments",c.id)).catch(()=>{})));
-        box.appendChild(row);
-      });
-      box.scrollTop=box.scrollHeight;
+        const n=Object.keys(cLikes[c.id]||{}).length, liked=!!(cLikes[c.id]&&cLikes[c.id][myUid]);
+        row.appendChild(actBtn((liked?"❤️":"🤍")+(n?" "+n:""),()=>toggleCLike(c)));
+        if(!isReply) row.appendChild(actBtn("↩",()=>{
+          cmReply=(cmReply&&cmReply.id===c.id)?null:{id:c.id,uid:c.uid,name:c.name||""};
+          $("cmInput").placeholder=cmReply?"Replying to "+cmReply.name+"…":"Write a comment…"; $("cmInput").focus();
+        }));
+        if(c.uid===myUid) row.appendChild(actBtn("✕",()=>{
+          deleteDoc(doc(db,"comments",c.id)).catch(()=>{});
+          if(!isReply) all.filter(k=>k.parentId===c.id).forEach(k=>deleteDoc(doc(db,"comments",k.id)).catch(()=>{}));
+        }));
+        return row;
+      };
+      tops.forEach(c=>{ box.appendChild(mk(c,false)); all.filter(k=>k.parentId===c.id).forEach(k=>box.appendChild(mk(k,true))); });
     }
     function updateCmCounts(){
       document.querySelectorAll(".cmBtn").forEach(b=>{ b.textContent="💬 "+(comments[b.dataset.id]||[]).length; });
@@ -897,8 +1280,15 @@
       const t=$("cmInput").value.trim();
       if(!t||!cmTarget||!myUid) return;
       $("cmInput").value="";
-      try{ await addDoc(collection(db,"comments"),{targetId:cmTarget,text:t.slice(0,300),name:myName,uid:myUid,createdAt:serverTimestamp()}); }
-      catch(e){ alert("Comment failed: "+e.code); }
+      const rp=cmReply; cmReply=null; $("cmInput").placeholder="Write a comment…";
+      const it=postRaw.find(p=>p.id===cmTarget)||reelList.find(r=>r.id===cmTarget)||{};
+      try{
+        const o={targetId:cmTarget,text:t.slice(0,300),name:myName,uid:myUid,createdAt:serverTimestamp()};
+        if(rp) o.parentId=rp.id;
+        await addDoc(collection(db,"comments"),o);
+        if(rp) notifTo(rp.uid,"reply",{text:t.slice(0,60)});
+        if(it.uid&&(!rp||rp.uid!==it.uid)) notifTo(it.uid,"comment",{text:t.slice(0,60),url:it.url||"",mediaKind:it.kind||"video"});
+      }catch(e){ alert("Comment failed: "+e.code); }
     }
     $("cmSend").onclick=sendComment;
     $("cmInput").addEventListener("keydown",e=>{ if(e.key==="Enter") sendComment(); });
@@ -916,7 +1306,7 @@
       $("postsBtn").style.opacity=.4;
       try{
         const url=await cloudUpload(f);
-        await addDoc(collection(db,"posts"),{url,kind:isV?"video":"image",caption:cap.slice(0,200),name:myName,uid:myUid,createdAt:serverTimestamp()});
+        await addDoc(collection(db,"posts"),{url,kind:isV?"video":"image",caption:cap.slice(0,200),tags:tagsOf(cap.slice(0,200)),name:myName,uid:myUid,createdAt:serverTimestamp()});
         toast("Post added ✅");
       }catch(err){ alert("Post failed: "+(err.message||err)); }
       $("postsBtn").style.opacity=1;
@@ -1088,8 +1478,9 @@
     function callBtn(txt,u,v){ const b=document.createElement("button"); b.textContent=txt; b.className="cBtn"; b.onclick=e=>{ e.stopPropagation(); openChat(u); startCall(v); }; return b; }
     function drawChats(){
       const box=$("chatList"); if(!box) return; box.innerHTML="";
+      { const raw=($("userSearch").value||"").trim(); if(raw.length>1&&raw[0]==="#"){ clearTimeout(drawChats.t); drawChats.t=setTimeout(()=>drawTags(raw.slice(1).toLowerCase()),300); return; } }
       const q=($("userSearch").value||"").trim().toLowerCase().replace(/^@/,"");
-      const arr=Object.values(usersMap).filter(u=>u.uid!==myUid&&(!q||((u.name||"")+" "+(u.username||"")).toLowerCase().includes(q)));
+      const arr=Object.values(usersMap).filter(u=>u.uid!==myUid&&!isHidden(u.uid)&&(!q||((u.name||"")+" "+(u.username||"")).toLowerCase().includes(q)));
       if(!arr.length){ box.innerHTML='<div class="reelEmpty">No other users yet<br>Ask friends to register</div>'; return; }
       arr.forEach(u=>{
         const p=presAll[u.uid]||{}, on=Date.now()-(p.lastActive||0)<75000;
@@ -1098,11 +1489,12 @@
         setAv(r.querySelector(".pAv"),u);
         r.querySelector("b").textContent=u.name||"";
         r.querySelector("small").textContent=on?"🟢 online":((u.username?"@"+u.username:"tap to chat")+(u.bio?" · "+u.bio:""));
-        const pb=document.createElement("button"); pb.className="cBtn"; pb.textContent="👤"; pb.onclick=e=>{ e.stopPropagation(); profUid=u.uid; showTab("prof"); }; r.append(pb,callBtn("📞",u,false),callBtn("🎥",u,true));
+        const pb=document.createElement("button"); pb.className="cBtn"; pb.textContent="👤"; pb.onclick=e=>{ e.stopPropagation(); profUid=u.uid; logHist("profile",u.uid,{uid:u.uid,name:u.name||""}); showTab("prof"); }; r.append(pb,callBtn("📞",u,false),callBtn("🎥",u,true));
         r.onclick=()=>openChat(u); box.appendChild(r);
       });
     }
     function openChat(u){
+      if(isHidden(u.uid)){ toast("You can't chat with this account"); return; }
       curPeer=u; curChat=[myUid,u.uid].sort().join("_");
       $("peerName").textContent=u.name||""; setAv($("peerAv"),u);
       other=presAll[u.uid]||null; updateSub();
@@ -1127,10 +1519,11 @@
       $("profNameShow").textContent=u.name||""; $("profBioShow").textContent=u.bio||"";
       $("stPosts").textContent=mine.length; $("stFollowers").textContent=followsAll.filter(f=>f.to===profUid).length; $("stFollowing").textContent=followsAll.filter(f=>f.from===profUid).length;
       $("profBack").hidden=me; $("profEdit").hidden=!me; $("profPhotoBtn").hidden=!me; $("profFollow").hidden=me; if(!me) $("profForm").hidden=true;
-      const fl=followsAll.some(f=>f.from===myUid&&f.to===profUid); $("profFollow").textContent=fl?"Following ✓":"Follow";
-      $("profMsg").hidden=me; $("tabPosts").classList.toggle("on",profTab==="posts"); $("tabReels").classList.toggle("on",profTab==="reels");
+      const fl=followsAll.some(f=>f.from===myUid&&f.to===profUid); $("profFollow").textContent=fl?"Following ✓":(reqOut.has(profUid)?"Requested":"Follow"); $("profMore").hidden=me;
+      $("profMsg").hidden=me||isHidden(profUid); $("profBlock").hidden=me; $("profBlock").textContent=myBlocks.has(profUid)?"Unblock":"Block"; $("tabPosts").classList.toggle("on",profTab==="posts"); $("tabReels").classList.toggle("on",profTab==="reels");
       const items=profTab==="reels"?reelList.filter(r=>r.uid===profUid):mine;
       const g=$("profGrid"); g.innerHTML="";
+      if(!me&&u.private&&!fl){ g.innerHTML='<div class="reelEmpty">🔒 This account is private<br>Follow to see their posts</div>'; return; }
       if(!items.length){ g.innerHTML='<div class="reelEmpty">No posts yet</div>'; return; }
       items.forEach(p=>{
         const c=document.createElement("div"); c.className="gCell";
@@ -1141,8 +1534,25 @@
       });
     }
     $("profBack").onclick=()=>{ profUid=myUid; showTab("chats"); };
-    $("profFollow").onclick=()=>{ const id=myUid+"_"+profUid, r=doc(db,"follows",id);
-      if(followsAll.some(f=>f.from===myUid&&f.to===profUid)) deleteDoc(r); else setDoc(r,{from:myUid,to:profUid}); };
+    $("profFollow").onclick=async()=>{
+      const t=profUid; if(!t||t===myUid) return; const id=myUid+"_"+t;
+      const following=followsAll.some(f=>f.from===myUid&&f.to===t);
+      try{
+        if(following) await deleteDoc(doc(db,"follows",id));
+        else if(reqOut.has(t)) await deleteDoc(doc(db,"followReqs",id));
+        else if((usersMap[t]||{}).private){ await setDoc(doc(db,"followReqs",id),{from:myUid,to:t,at:Date.now()}); notifTo(t,"request",{}); toast("Follow request sent"); }
+        else{ await setDoc(doc(db,"follows",id),{from:myUid,to:t}); notifTo(t,"follow",{}); }
+      }catch(e){ alert("Failed: "+e.code); }
+    };
+    $("profMore").onclick=()=>{
+      const t=profUid; if(!t||t===myUid) return; const nm=(usersMap[t]||{}).name||"this account";
+      actionSheet(nm,[
+        [isMuted(t)?"🔔 Unmute posts & stories":"🔕 Mute posts & stories",()=>togglePref("muted",t)],
+        [isRestricted(t)?"Unrestrict":"🤫 Restrict",()=>togglePref("restricted",t)],
+        ["🚩 Report account",()=>reportThing("account",t,t)],
+        [myBlocks.has(t)?"Unblock":"🚫 Block",()=>$("profBlock").click()]
+      ]);
+    };
     $("profEdit").onclick=()=>{ const f=$("profForm"); f.hidden=!f.hidden; $("profEdit").textContent=f.hidden?"Edit profile":"Cancel"; if(!f.hidden){ const u=usersMap[myUid]||{}; $("profName").value=u.name||myName||""; $("profBio").value=u.bio||""; } };
     $("profPhotoBtn").onclick=()=>$("profPhoto").click();
     $("profPhoto").onchange=async e=>{
@@ -1186,8 +1596,21 @@
 
     $("tabPosts").onclick=()=>{ profTab="posts"; drawProf(); };
     $("tabReels").onclick=()=>{ profTab="reels"; drawProf(); };
+    $("profBlock").onclick=async()=>{
+      const t=profUid; if(!t||t===myUid) return;
+      const ref=doc(db,"blocks",myUid+"_"+t);
+      try{
+        if(myBlocks.has(t)){ await deleteDoc(ref); toast("Unblocked ✅"); return; }
+        if(!confirm("Block "+((usersMap[t]||{}).name||"this account")+"? They won't be able to message or call you, and you won't see each other's posts.")) return;
+        await setDoc(ref,{by:myUid,who:t,at:Date.now()});
+        deleteDoc(doc(db,"follows",myUid+"_"+t)).catch(()=>{});
+        deleteDoc(doc(db,"follows",t+"_"+myUid)).catch(()=>{});
+        toast("Blocked 🚫"); showTab("chats");
+      }catch(e){ alert("Failed: "+e.code); }
+    };
     $("profMsg").onclick=()=>{ const u=usersMap[profUid]; if(u) openChat(u); };
     $("userSearch").oninput=drawChats;
+    $("userSearch").addEventListener("change",()=>{ const t=$("userSearch").value.trim(); if(t.length>=2) logHist("search",encodeURIComponent(t.toLowerCase()).slice(0,150),{text:t}); });
     function showFollows(kind){
       const ids=followsAll.filter(f=>kind==="followers"?f.to===profUid:f.from===profUid).map(f=>kind==="followers"?f.from:f.to);
       $("fTitle").textContent=(kind==="followers"?"Followers":"Following")+" ("+ids.length+")"; const box=$("fRows"); box.innerHTML="";
