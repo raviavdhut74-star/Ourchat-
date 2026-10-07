@@ -41,6 +41,7 @@
       <div id="menu" hidden>
         <button id="notifBtn">🔔 Notifications</button>
         <button id="heartBtn" style="display:none">❤️</button>
+        <button id="galMenu">🖼️ Gallery</button>
         <button id="darkBtn">🌙 Dark mode</button>
         <button id="deleteAllBtn">🗑️ Delete my messages</button>
         <button id="clearAllBtn" style="display:none">x</button>
@@ -54,7 +55,13 @@
     </div>
     <div id="postFeed"></div>
   </div>
-  <div id="chats" hidden><div class="ctitle">Chats</div><div id="chatList"></div></div>
+  <div id="chats" hidden><div class="ctitle">Chats</div><div id="chatList"></div><div class="ctitle">Calls</div><div id="callLog"></div></div>
+  <div id="prof" hidden>
+    <div class="ctitle">Profile</div>
+    <div class="profBox"><div class="bigAv" id="profAv"></div>
+      <button id="profPhotoBtn" class="lnk">Change photo</button><input type="file" id="profPhoto" accept="image/*" hidden>
+      <input id="profName" placeholder="Name" maxlength="30"><input id="profBio" placeholder="Bio" maxlength="80">
+      <button id="profSave" class="saveBtn">Save</button></div></div>
 
   <div id="chatScreen" hidden>
   <div class="header">
@@ -94,12 +101,13 @@
 
   </div>
 
+  <span id="galBtn" hidden></span>
   <nav id="nav">
     <button id="navChat" class="on"><i><svg class="ic"><use href="#i-grid"/></svg></i>Home</button>
     <button id="reelsBtn"><i><svg class="ic"><use href="#i-film"/></svg></i>Reels</button>
     <button id="postsBtn"><i><svg class="ic"><use href="#i-plus"/></svg></i>Post</button>
     <button id="navChats"><i><svg class="ic"><use href="#i-chat"/></svg></i>Chats</button>
-    <button id="galBtn"><i><svg class="ic"><use href="#i-image"/></svg></i>Gallery</button>
+    <button id="navProf"><i><svg class="ic"><use href="#i-ghost"/></svg></i>Profile</button>
   </nav>
 
   <input type="file" id="snapInput" accept="image/*" capture="environment" hidden>

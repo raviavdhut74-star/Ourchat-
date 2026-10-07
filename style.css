@@ -239,3 +239,11 @@ button:active{transform:scale(.92)}
 .callBtns button{background:#ffffff26;color:#fff}
 .callBtns .red{background:#e5484d}
 .callBtns .green{background:#25d366}
+
+#prof{flex:1;min-height:0;overflow-y:auto}#prof[hidden]{display:none}
+.profBox{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px}
+.profBox input:not([hidden]){width:100%;max-width:340px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit}
+.saveBtn{padding:12px 36px;border:0;border-radius:99px;background:var(--out);color:#fff;font-size:16px}
+#profAv{color:#fff}
+.cBtn{margin-left:auto;border:0;background:none;font-size:20px;padding:6px}.cBtn+.cBtn{margin-left:0}
+.cRow small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46vw}

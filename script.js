@@ -43,7 +43,7 @@
       myName=user.displayName||regName||localStorage.getItem("ourchat_name")||(user.email||"Me").split("@")[0];
       localStorage.setItem("ourchat_name",myName);
       setDoc(doc(db,"users",myUid),{uid:myUid,name:myName,email:user.email||""},{merge:true}).catch(()=>{});
-      if(!started){ started=true; listenUsers(); listenCalls(); listenPresence(); listenExtras(); listenReels(); listenPosts(); }
+      if(!started){ started=true; listenUsers(); listenCalls(); listenPresence(); listenCallLog(); listenExtras(); listenReels(); listenPosts(); }
     });
 
     async function doLogin(){
@@ -1046,6 +1046,8 @@
       onSnapshot(collection(db,"users"),s=>{ usersMap={}; s.forEach(d=>{ usersMap[d.id]=d.data(); }); drawChats(); },()=>{});
       listenPresence(); listenExtras(); listenReels(); listenPosts();
     }
+    function setAv(el,u){ u=u||{}; el.style.backgroundImage=u.photo?"url('"+u.photo+"')":""; el.style.backgroundSize="cover"; el.textContent=u.photo?"":(u.name||"?").charAt(0).toUpperCase(); }
+    function callBtn(txt,u,v){ const b=document.createElement("button"); b.textContent=txt; b.className="cBtn"; b.onclick=e=>{ e.stopPropagation(); openChat(u); startCall(v); }; return b; }
     function drawChats(){
       const box=$("chatList"); if(!box) return; box.innerHTML="";
       const arr=Object.values(usersMap).filter(u=>u.uid!==myUid);
@@ -1054,23 +1056,68 @@
         const p=presAll[u.uid]||{}, on=Date.now()-(p.lastActive||0)<75000;
         const r=document.createElement("div"); r.className="cRow";
         r.innerHTML='<span class="pAv"></span><div><b></b><small></small></div>';
-        r.querySelector(".pAv").textContent=(u.name||"?").charAt(0).toUpperCase();
+        setAv(r.querySelector(".pAv"),u);
         r.querySelector("b").textContent=u.name||"";
-        r.querySelector("small").textContent=on?"🟢 online":"tap to chat";
+        r.querySelector("small").textContent=on?"🟢 online":(u.bio||"tap to chat");
+        r.append(callBtn("📞",u,false),callBtn("🎥",u,true));
         r.onclick=()=>openChat(u); box.appendChild(r);
       });
     }
     function openChat(u){
       curPeer=u; curChat=[myUid,u.uid].sort().join("_");
-      $("peerName").textContent=u.name||""; $("peerAv").textContent=(u.name||"?").charAt(0).toUpperCase();
+      $("peerName").textContent=u.name||""; setAv($("peerAv"),u);
       other=presAll[u.uid]||null; updateSub();
       $("chatScreen").hidden=false; listenMessages();
     }
     $("chatBack").onclick=()=>{ if(msgUnsub){ msgUnsub(); msgUnsub=null; } curChat=null; curPeer=null; other=null; $("chatScreen").hidden=true; };
     function showTab(t){
-      $("home").hidden=t!=="home"; $("chats").hidden=t!=="chats";
+      $("home").hidden=t!=="home"; $("chats").hidden=t!=="chats"; $("prof").hidden=t!=="prof";
+      $("navProf").classList.toggle("on",t==="prof"); if(t==="prof") drawProf();
       $("navChat").classList.toggle("on",t==="home"); $("navChats").classList.toggle("on",t==="chats");
     }
     $("navChat").onclick=()=>showTab("home");
+    $("navProf").onclick=()=>showTab("prof");
+    $("galMenu").onclick=()=>$("galBtn").onclick();
     $("navChats").onclick=()=>showTab("chats");
     $("topChats").onclick=()=>showTab("chats");
+
+    function drawProf(){ const u=usersMap[myUid]||{name:myName}; setAv($("profAv"),u); $("profName").value=u.name||myName||""; $("profBio").value=u.bio||""; }
+    $("profPhotoBtn").onclick=()=>$("profPhoto").click();
+    $("profPhoto").onchange=async e=>{
+      const f=e.target.files[0]; e.target.value=""; if(!f) return;
+      $("profPhotoBtn").textContent="Uploading...";
+      try{ const photo=await cloudUpload(f); await setDoc(doc(db,"users",myUid),{photo},{merge:true}); toast("Photo updated ✅"); }
+      catch(err){ alert("Photo failed: "+(err.message||err)); }
+      $("profPhotoBtn").textContent="Change photo";
+    };
+    $("profSave").onclick=async()=>{
+      const name=$("profName").value.trim()||myName, bio=$("profBio").value.trim();
+      try{
+        await setDoc(doc(db,"users",myUid),{name,bio},{merge:true});
+        myName=name; localStorage.setItem("ourchat_name",name);
+        if(auth.currentUser) updateProfile(auth.currentUser,{displayName:name}).catch(()=>{});
+        toast("Saved ✅");
+      }catch(err){ alert("Save failed: "+err.code); }
+    };
+
+    /* ===== call history ===== */
+    let callsMap={};
+    function listenCallLog(){
+      ["from","to"].forEach(k=>onSnapshot(query(collection(db,"calls"),where(k,"==",myUid)),s=>{
+        s.forEach(d=>{ callsMap[d.id]=d.data(); }); drawCallLog();
+      },()=>{}));
+    }
+    function drawCallLog(){
+      const box=$("callLog"); box.innerHTML="";
+      const arr=Object.values(callsMap).filter(c=>c.to).sort((a,b)=>b.createdAt-a.createdAt).slice(0,15);
+      if(!arr.length){ box.innerHTML='<div class="reelEmpty">No calls yet</div>'; return; }
+      arr.forEach(c=>{
+        const out=c.from===myUid, pid=out?c.to:c.from, u=usersMap[pid]||{uid:pid,name:c.name||"?"};
+        const miss=!out&&!c.answer;
+        const r=document.createElement("div"); r.className="cRow";
+        r.innerHTML='<span class="pAv"></span><div><b></b><small></small></div>'; setAv(r.querySelector(".pAv"),u);
+        r.querySelector("b").textContent=u.name||""; if(miss) r.querySelector("b").style.color="#e5484d";
+        r.querySelector("small").textContent=(out?"↗ ":"↙ ")+(c.video?"Video":"Voice")+(miss?" · missed":"")+" · "+new Date(c.createdAt).toLocaleString([],{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"});
+        r.append(callBtn(c.video?"🎥":"📞",u,!!c.video)); box.appendChild(r);
+      });
+    }
