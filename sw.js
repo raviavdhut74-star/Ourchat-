@@ -1,4 +1,4 @@
-self.addEventListener('install', function(e){ self.skipWaiting(); }); // v1791500001
+self.addEventListener('install', function(e){ self.skipWaiting(); }); // v1791500002
 self.addEventListener('activate', function(e){ e.waitUntil(self.clients.claim()); });
 self.addEventListener('fetch', function(e){});
 self.addEventListener('notificationclick', function(e){

@@ -556,12 +556,13 @@
         updateReacts();
       },()=>{});
       onSnapshot(query(collection(db,"stories"),orderBy("createdAt","desc"),limit(80)),s=>{
-        stories=[];
+        storyRaw=[];
         s.forEach(d=>{
           const x=d.data();
           const t=x.createdAt&&x.createdAt.toMillis?x.createdAt.toMillis():Date.now();
-          if(Date.now()-t<86400000) stories.push({id:d.id,...x,t});
+          if(Date.now()-t<86400000) storyRaw.push({id:d.id,...x,t});
         });
+        stories=storyRaw.filter(canSee);
         drawStories();
       },()=>{});
     }
@@ -790,7 +791,13 @@
     };
 
     /* ================= POSTS / COMMENTS / SHARE / DOWNLOAD ================= */
-    let postList=[], comments={}, cmTarget=null;
+    let postList=[], postRaw=[], storyRaw=[], comments={}, cmTarget=null;
+    // visibility: author's posts/stories are seen only by the author and by people who follow the author
+    const canSee=x=>x.uid===myUid||followsAll.some(f=>f.from===myUid&&f.to===x.uid);
+    function applyVis(){
+      postList=postRaw.filter(canSee); stories=storyRaw.filter(canSee);
+      drawPosts(); drawStories();
+    }
     const dlUrl=u=>(u||"").replace("/upload/","/upload/fl_attachment/");
     const mp4=u=>(u||"").replace(/\.[a-z0-9]+$/i,".mp4");
 
@@ -815,7 +822,8 @@
 
     function listenPosts(){
       onSnapshot(query(collection(db,"posts"),orderBy("createdAt","desc"),limit(30)),s=>{
-        postList=[]; s.forEach(d=>postList.push({id:d.id,...d.data()}));
+        postRaw=[]; s.forEach(d=>postRaw.push({id:d.id,...d.data()}));
+        postList=postRaw.filter(canSee);
         drawPosts();
       },()=>{});
       onSnapshot(query(collection(db,"comments"),orderBy("createdAt"),limit(300)),s=>{
@@ -1049,10 +1057,11 @@
     /* ================= CLEAR CHAT FOR EVERYONE ================= */
     $("clearAllBtn").onclick=async()=>{
       if(!myUid) return;
-      if(!confirm("⚠️ All messages will be deleted for everyone, permanently. Continue?")) return;
+      if(!confirm("⚠️ All messages of this chat will be deleted for both of you, permanently. Continue?")) return;
       if(!confirm("Really delete? This cannot be undone.")) return;
       try{
-        const snapshot=await getDocs(collection(db,"messages"));
+        if(!curChat){ alert("Open a chat first"); return; }
+        const snapshot=await getDocs(query(collection(db,"messages"),where("chatId","==",curChat)));
         await Promise.all(snapshot.docs.map(d=>deleteDoc(doc(db,"messages",d.id))));
       }catch(e){ alert("Clear failed: "+e.code); }
     };
@@ -1062,7 +1071,7 @@
       if(!myUid)return;
       if(!confirm("Delete all your messages?"))return;
       try{
-        const q=query(collection(db,"messages"),where("uid","==",myUid));
+        const q=query(collection(db,"messages"),where("chatId","==",curChat||"-"),where("uid","==",myUid));
         const snapshot=await getDocs(q);
         await Promise.all(snapshot.docs.map(d=>deleteDoc(doc(db,"messages",d.id))));
         alert("All your messages deleted ❤️");
@@ -1110,7 +1119,7 @@
     $("galMenu").onclick=()=>$("galBtn").onclick();
     $("navChats").onclick=()=>showTab("chats");
 
-    function listenFollows(){ onSnapshot(collection(db,"follows"),sn=>{ followsAll=[]; sn.forEach(d=>followsAll.push(d.data())); if(!$("prof").hidden) drawProf(); },()=>{}); }
+    function listenFollows(){ onSnapshot(collection(db,"follows"),sn=>{ followsAll=[]; sn.forEach(d=>followsAll.push(d.data())); applyVis(); if(!$("prof").hidden) drawProf(); },()=>{}); }
     function drawProf(){
       profUid=profUid||myUid; const me=profUid===myUid;
       const u=usersMap[profUid]||(me?{name:myName}:{}), mine=postList.filter(p=>p.uid===profUid);
