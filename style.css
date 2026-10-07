@@ -270,3 +270,5 @@ button:active{transform:scale(.92)}
 .pTabs{display:flex;border-top:1px solid var(--line)}.pTabs button{flex:1;padding:11px;border:0;border-bottom:2px solid transparent;background:none;color:var(--muted);font-weight:600}.pTabs button.on{color:var(--text);border-color:var(--accent)}
 .pStats>div{cursor:pointer}
 #fList{z-index:40;justify-content:flex-start;align-items:stretch;overflow-y:auto;background:var(--bg);color:var(--text)}#fList .saveBtn{margin:16px auto}
+
+.verTag{margin-left:auto;font-size:11px;color:var(--muted);opacity:.7}
