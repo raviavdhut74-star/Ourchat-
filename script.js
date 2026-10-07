@@ -33,6 +33,7 @@
     let myName=null, myUid=null, started=false, regMode=false, regName="", curPeer=null, curChat=null, presAll={}, usersMap={}, msgUnsub=null;
 
     onAuthStateChanged(auth,user=>{
+      $("splash").hidden=true;
       if(!user||user.isAnonymous){
         if(user) signOut(auth);
         $("loginBox").hidden=false;
@@ -653,10 +654,11 @@
     $("camBtn").onclick=()=>$("snapInput").click();
 
     /* ================= MENU ================= */
-    $("menuBtn").onclick=()=>{ $("menu").hidden=!$("menu").hidden; };
-    $("menu").onclick=()=>{ $("menu").hidden=true; };
     document.addEventListener("click",e=>{
-      if(!e.target.closest("#menu")&&e.target.id!=="menuBtn") $("menu").hidden=true;
+      const t=e.target;
+      if(t.closest("#menuBtn")){ $("menu").hidden=!$("menu").hidden; return; }
+      if(t.closest("#topChats")){ $("menu").hidden=true; showTab("chats"); return; }
+      $("menu").hidden=true;
     });
 
     /* ================= REELS ================= */
@@ -797,7 +799,7 @@
     }
 
     function drawPosts(){
-      const feed=$("postFeed"); feed.innerHTML="";
+      const feed=$("postFeed"); feed.innerHTML=""; if(!$("prof").hidden) drawProf();
       if(!postList.length){
         feed.innerHTML='<div class="reelEmpty">No posts yet<br>Tap ➕ Post below to add the first photo</div>';
         return;
@@ -1079,14 +1081,28 @@
     $("navProf").onclick=()=>showTab("prof");
     $("galMenu").onclick=()=>$("galBtn").onclick();
     $("navChats").onclick=()=>showTab("chats");
-    $("topChats").onclick=()=>showTab("chats");
 
-    function drawProf(){ const u=usersMap[myUid]||{name:myName}; setAv($("profAv"),u); $("profName").value=u.name||myName||""; $("profBio").value=u.bio||""; }
+    function drawProf(){
+      const u=usersMap[myUid]||{name:myName}, mine=postList.filter(p=>p.uid===myUid);
+      setAv($("profAv"),u); $("profUser").textContent=(u.name||myName||"").toLowerCase().replace(/\s+/g,"_");
+      $("profNameShow").textContent=u.name||myName||""; $("profBioShow").textContent=u.bio||"";
+      $("stPosts").textContent=mine.length; $("stReels").textContent=reelList.filter(r=>r.uid===myUid).length; $("stStories").textContent=stories.filter(x=>x.uid===myUid).length;
+      if(!$("profForm").hidden===false){ $("profName").value=u.name||myName||""; $("profBio").value=u.bio||""; }
+      const g=$("profGrid"); g.innerHTML="";
+      if(!mine.length){ g.innerHTML='<div class="reelEmpty">No posts yet</div>'; return; }
+      mine.forEach(p=>{
+        const c=document.createElement("div"); c.className="gCell";
+        if(p.kind==="video"){ const v=document.createElement("video"); v.src=mp4(p.url); v.muted=true; v.preload="metadata"; v.playsInline=true; c.append(v); c.onclick=()=>{ showTab("home"); }; }
+        else{ const im=document.createElement("img"); im.src=p.url; im.loading="lazy"; c.append(im); c.onclick=()=>showViewer(p.url,p.caption||"",0,null); }
+        g.appendChild(c);
+      });
+    }
+    $("profEdit").onclick=()=>{ const f=$("profForm"); f.hidden=!f.hidden; $("profEdit").textContent=f.hidden?"Edit profile":"Cancel"; if(!f.hidden){ const u=usersMap[myUid]||{}; $("profName").value=u.name||myName||""; $("profBio").value=u.bio||""; } };
     $("profPhotoBtn").onclick=()=>$("profPhoto").click();
     $("profPhoto").onchange=async e=>{
       const f=e.target.files[0]; e.target.value=""; if(!f) return;
       $("profPhotoBtn").textContent="Uploading...";
-      try{ const photo=await cloudUpload(f); await setDoc(doc(db,"users",myUid),{photo},{merge:true}); toast("Photo updated ✅"); }
+      try{ const photo=await cloudUpload(f); await setDoc(doc(db,"users",myUid),{photo},{merge:true}); toast("Photo updated ✅"); setTimeout(drawProf,500); }
       catch(err){ alert("Photo failed: "+(err.message||err)); }
       $("profPhotoBtn").textContent="Change photo";
     };
@@ -1096,7 +1112,7 @@
         await setDoc(doc(db,"users",myUid),{name,bio},{merge:true});
         myName=name; localStorage.setItem("ourchat_name",name);
         if(auth.currentUser) updateProfile(auth.currentUser,{displayName:name}).catch(()=>{});
-        toast("Saved ✅");
+        toast("Saved ✅"); $("profForm").hidden=true; $("profEdit").textContent="Edit profile"; setTimeout(drawProf,500);
       }catch(err){ alert("Save failed: "+err.code); }
     };
 

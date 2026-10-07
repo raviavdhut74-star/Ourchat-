@@ -57,11 +57,15 @@
   </div>
   <div id="chats" hidden><div class="ctitle">Chats</div><div id="chatList"></div><div class="ctitle">Calls</div><div id="callLog"></div></div>
   <div id="prof" hidden>
-    <div class="ctitle">Profile</div>
-    <div class="profBox"><div class="bigAv" id="profAv"></div>
-      <button id="profPhotoBtn" class="lnk">Change photo</button><input type="file" id="profPhoto" accept="image/*" hidden>
-      <input id="profName" placeholder="Name" maxlength="30"><input id="profBio" placeholder="Bio" maxlength="80">
-      <button id="profSave" class="saveBtn">Save</button></div></div>
+    <div class="header igHead"><div class="logoT" id="profUser"></div></div>
+    <div class="pTop"><div class="bigAv" id="profAv"></div>
+      <div class="pStats"><div><b id="stPosts">0</b>Posts</div><div><b id="stReels">0</b>Reels</div><div><b id="stStories">0</b>Stories</div></div></div>
+    <div class="pInfo"><b id="profNameShow"></b><div id="profBioShow"></div></div>
+    <div class="pBtns"><button id="profEdit">Edit profile</button><button id="profPhotoBtn">Change photo</button></div>
+    <input type="file" id="profPhoto" accept="image/*" hidden>
+    <div id="profForm" hidden><input id="profName" placeholder="Name" maxlength="30"><input id="profBio" placeholder="Bio" maxlength="80"><button id="profSave" class="saveBtn">Save</button></div>
+    <div class="pGrid" id="profGrid"></div>
+  </div>
 
   <div id="chatScreen" hidden>
   <div class="header">
@@ -179,7 +183,8 @@
     <div class="callBtns"><button id="declineBtn" class="red">📵</button><button id="acceptBtn" class="green">📞</button></div>
   </div>
 
-  <div id="loginBox" class="overlay">
+  <div id="splash" class="overlay"><img src="icon-192.png" alt="" style="width:84px;border-radius:20px"></div>
+  <div id="loginBox" class="overlay" hidden>
     <div class="loginCard">
       <img class="loginLogo" src="icon-192.png" alt="">
       <div class="loginTitle">Jivlag</div>
