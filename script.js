@@ -30,7 +30,7 @@
     const callUI=$("callUI"), remoteVideo=$("remoteVideo"), localVideo=$("localVideo"), callInfo=$("callInfo");
     const incoming=$("incoming"), incomingText=$("incomingText");
 
-    let myName=null, myUid=null, started=false, regMode=false, regName="", profUid=null, followsAll=[], curPeer=null, curChat=null, presAll={}, usersMap={}, msgUnsub=null;
+    let myName=null, myUid=null, started=false, regMode=false, regName="", profUid=null, profTab="posts", followsAll=[], curPeer=null, curChat=null, presAll={}, usersMap={}, msgUnsub=null;
 
     onAuthStateChanged(auth,user=>{
       $("splash").hidden=true;
@@ -842,7 +842,7 @@
           actBtn("➤",()=>shareToChat(p.kind==="video"?{type:"video",url:mp4(p.url),text:""}:{type:"image",url:p.url,text:""})),
           dlLink(p.url));
         if(p.uid===myUid){
-          const del=actBtn("🗑️",()=>{ if(confirm("Delete this post?")) deleteDoc(doc(db,"posts",p.id)).catch(e=>alert("Delete failed: "+e.code)); });
+          const del=actBtn("🗑️",()=>{ if(confirm("Delete this?")) deleteDoc(doc(db,profTab==="reels"?"reels":"posts",p.id)).catch(e=>alert("Delete failed: "+e.code)); });
           del.style.marginLeft="auto"; act.appendChild(del);
         }
         c.append(h,m,act);
@@ -1069,7 +1069,8 @@
     function callBtn(txt,u,v){ const b=document.createElement("button"); b.textContent=txt; b.className="cBtn"; b.onclick=e=>{ e.stopPropagation(); openChat(u); startCall(v); }; return b; }
     function drawChats(){
       const box=$("chatList"); if(!box) return; box.innerHTML="";
-      const arr=Object.values(usersMap).filter(u=>u.uid!==myUid);
+      const q=($("userSearch").value||"").trim().toLowerCase().replace(/^@/,"");
+      const arr=Object.values(usersMap).filter(u=>u.uid!==myUid&&(!q||((u.name||"")+" "+(u.username||"")).toLowerCase().includes(q)));
       if(!arr.length){ box.innerHTML='<div class="reelEmpty">No other users yet<br>Ask friends to register</div>'; return; }
       arr.forEach(u=>{
         const p=presAll[u.uid]||{}, on=Date.now()-(p.lastActive||0)<75000;
@@ -1077,7 +1078,7 @@
         r.innerHTML='<span class="pAv"></span><div><b></b><small></small></div>';
         setAv(r.querySelector(".pAv"),u);
         r.querySelector("b").textContent=u.name||"";
-        r.querySelector("small").textContent=on?"🟢 online":(u.bio||"tap to chat");
+        r.querySelector("small").textContent=on?"🟢 online":((u.username?"@"+u.username:"tap to chat")+(u.bio?" · "+u.bio:""));
         const pb=document.createElement("button"); pb.className="cBtn"; pb.textContent="👤"; pb.onclick=e=>{ e.stopPropagation(); profUid=u.uid; showTab("prof"); }; r.append(pb,callBtn("📞",u,false),callBtn("🎥",u,true));
         r.onclick=()=>openChat(u); box.appendChild(r);
       });
@@ -1108,11 +1109,13 @@
       $("stPosts").textContent=mine.length; $("stFollowers").textContent=followsAll.filter(f=>f.to===profUid).length; $("stFollowing").textContent=followsAll.filter(f=>f.from===profUid).length;
       $("profBack").hidden=me; $("profEdit").hidden=!me; $("profPhotoBtn").hidden=!me; $("profFollow").hidden=me; if(!me) $("profForm").hidden=true;
       const fl=followsAll.some(f=>f.from===myUid&&f.to===profUid); $("profFollow").textContent=fl?"Following ✓":"Follow";
+      $("profMsg").hidden=me; $("tabPosts").classList.toggle("on",profTab==="posts"); $("tabReels").classList.toggle("on",profTab==="reels");
+      const items=profTab==="reels"?reelList.filter(r=>r.uid===profUid):mine;
       const g=$("profGrid"); g.innerHTML="";
-      if(!mine.length){ g.innerHTML='<div class="reelEmpty">No posts yet</div>'; return; }
-      mine.forEach(p=>{
+      if(!items.length){ g.innerHTML='<div class="reelEmpty">No posts yet</div>'; return; }
+      items.forEach(p=>{
         const c=document.createElement("div"); c.className="gCell";
-        if(p.kind==="video"){ const v=document.createElement("video"); v.src=mp4(p.url); v.muted=true; v.preload="metadata"; v.playsInline=true; c.append(v); c.onclick=()=>showTab("home"); }
+        if(p.kind==="video"||profTab==="reels"){ const v=document.createElement("video"); v.src=mp4(p.url); v.muted=true; v.preload="metadata"; v.playsInline=true; c.append(v); c.onclick=()=>{ if(profTab==="reels") $("reelsBtn").click(); else showTab("home"); }; }
         else{ const im=document.createElement("img"); im.src=p.url; im.loading="lazy"; c.append(im); c.onclick=()=>showViewer(p.url,p.caption||"",0,null); }
         if(me){ const x=document.createElement("button"); x.className="gDel"; x.textContent="🗑"; x.onclick=ev=>{ ev.stopPropagation(); if(confirm("Delete this post?")) deleteDoc(doc(db,"posts",p.id)).catch(er=>alert("Failed: "+er.code)); }; c.append(x); }
         g.appendChild(c);
@@ -1161,3 +1164,21 @@
         r.append(callBtn(c.video?"🎥":"📞",u,!!c.video)); box.appendChild(r);
       });
     }
+
+    $("tabPosts").onclick=()=>{ profTab="posts"; drawProf(); };
+    $("tabReels").onclick=()=>{ profTab="reels"; drawProf(); };
+    $("profMsg").onclick=()=>{ const u=usersMap[profUid]; if(u) openChat(u); };
+    $("userSearch").oninput=drawChats;
+    function showFollows(kind){
+      const ids=followsAll.filter(f=>kind==="followers"?f.to===profUid:f.from===profUid).map(f=>kind==="followers"?f.from:f.to);
+      $("fTitle").textContent=(kind==="followers"?"Followers":"Following")+" ("+ids.length+")"; const box=$("fRows"); box.innerHTML="";
+      if(!ids.length) box.innerHTML='<div class="reelEmpty">Nobody yet</div>';
+      ids.forEach(id=>{ const u=usersMap[id]||{uid:id,name:"?"}, r=document.createElement("div"); r.className="cRow";
+        r.innerHTML='<span class="pAv"></span><div><b></b><small></small></div>'; setAv(r.querySelector(".pAv"),u);
+        r.querySelector("b").textContent=u.name||""; r.querySelector("small").textContent=u.username?"@"+u.username:"";
+        r.onclick=()=>{ $("fList").hidden=true; profUid=id; showTab("prof"); }; box.appendChild(r); });
+      $("fList").hidden=false;
+    }
+    $("stFollowers").parentElement.onclick=()=>showFollows("followers");
+    $("stFollowing").parentElement.onclick=()=>showFollows("following");
+    $("fClose").onclick=()=>{ $("fList").hidden=true; };

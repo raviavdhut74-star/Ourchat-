@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1791366407">
+  <link rel="stylesheet" href="style.css?v=1791367098">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -56,15 +56,16 @@
     </div>
     <div id="postFeed"></div>
   </div>
-  <div id="chats" hidden><div class="ctitle">Chats</div><div id="chatList"></div><div class="ctitle">Calls</div><div id="callLog"></div></div>
+  <div id="chats" hidden><div class="ctitle">Chats</div><input id="userSearch" class="uSearch" placeholder="🔍 Search users" autocomplete="off" autocapitalize="none"><div id="chatList"></div><div class="ctitle">Calls</div><div id="callLog"></div></div>
   <div id="prof" hidden>
     <div class="header igHead"><button id="profBack" class="ib" hidden>←</button><div class="logoT" id="profUser"></div></div>
     <div class="pTop"><div class="bigAv" id="profAv"></div>
       <div class="pStats"><div><b id="stPosts">0</b>Posts</div><div><b id="stFollowers">0</b>Followers</div><div><b id="stFollowing">0</b>Following</div></div></div>
     <div class="pInfo"><b id="profNameShow"></b><div id="profBioShow"></div></div>
-    <div class="pBtns"><button id="profEdit">Edit profile</button><button id="profPhotoBtn">Change photo</button><button id="profFollow" hidden>Follow</button></div>
+    <div class="pBtns"><button id="profEdit">Edit profile</button><button id="profPhotoBtn">Change photo</button><button id="profFollow" hidden>Follow</button><button id="profMsg" hidden>Message</button></div>
     <input type="file" id="profPhoto" accept="image/*" hidden>
     <div id="profForm" hidden><input id="profName" placeholder="Name" maxlength="30"><input id="profBio" placeholder="Bio" maxlength="80"><button id="profSave" class="saveBtn">Save</button></div>
+    <div class="pTabs"><button id="tabPosts" class="on">▦ Posts</button><button id="tabReels">🎬 Reels</button></div>
     <div class="pGrid" id="profGrid"></div>
   </div>
 
@@ -185,6 +186,7 @@
   </div>
 
   <div id="splash" class="overlay"><img src="icon-192.png" alt="" style="width:84px;border-radius:20px"></div>
+  <div id="fList" class="overlay" hidden><div class="ctitle" id="fTitle"></div><div id="fRows"></div><button id="fClose" class="saveBtn">Close</button></div>
   <div id="loginBox" class="overlay" hidden>
     <div class="loginCard">
       <img class="loginLogo" src="icon-192.png" alt="">
@@ -201,7 +203,7 @@
     </div>
   </div>
 
-  <script type="module" src="script.js?v=1791366407"></script>
+  <script type="module" src="script.js?v=1791367098"></script>
   <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 </body>
 </html>

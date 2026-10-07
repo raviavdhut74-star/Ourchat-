@@ -265,3 +265,8 @@ button:active{transform:scale(.92)}
 
 .gCell{position:relative}.gDel{position:absolute;top:4px;right:4px;border:0;border-radius:50%;width:28px;height:28px;background:#000a;color:#fff}
 #profBack{margin-right:8px}#loginBox input[hidden]{display:none}
+
+.uSearch{display:block;width:calc(100% - 32px);margin:0 16px 8px;padding:11px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit}
+.pTabs{display:flex;border-top:1px solid var(--line)}.pTabs button{flex:1;padding:11px;border:0;border-bottom:2px solid transparent;background:none;color:var(--muted);font-weight:600}.pTabs button.on{color:var(--text);border-color:var(--accent)}
+.pStats>div{cursor:pointer}
+#fList{z-index:40;justify-content:flex-start;align-items:stretch;overflow-y:auto;background:var(--bg);color:var(--text)}#fList .saveBtn{margin:16px auto}
