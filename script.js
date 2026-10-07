@@ -567,8 +567,10 @@
     }
 
     // viewer (snap + story)
-    function showViewer(url,cap,secs,onDel){
-      $("viewImg").src=url;
+    function showViewer(url,cap,secs,onDel,isVid){
+      const vv=$("viewVid"); vv.onended=null; vv.pause(); vv.removeAttribute("src");
+      if(isVid){ $("viewImg").hidden=true; $("viewImg").src=""; vv.hidden=false; vv.src=url; vv.play().catch(()=>{}); }
+      else{ vv.hidden=true; $("viewImg").hidden=false; $("viewImg").src=url; }
       $("viewDel").hidden=!onDel;
       $("viewDel").onclick=onDel?async()=>{ closeViewer(); try{ await onDel(); }catch(e){} }:null;
       $("viewer").hidden=false;
@@ -582,7 +584,7 @@
         },1000);
       }
     }
-    function closeViewer(){ clearInterval(vTimer); $("viewer").hidden=true; $("viewImg").src=""; if(playStory.o) $("viewer").onclick=playStory.o; }
+    function closeViewer(){ clearInterval(vTimer); clearTimeout(vTimer); const vv=$("viewVid"); vv.onended=null; vv.pause(); vv.removeAttribute("src"); vv.hidden=true; $("viewImg").hidden=false; $("viewer").hidden=true; $("viewImg").src=""; if(playStory.o) $("viewer").onclick=playStory.o; }
     $("viewer").onclick=e=>{ if(e.target.id!=="viewDel") closeViewer(); };
 
     // view-once snap
@@ -616,8 +618,11 @@
       if(!f||!myUid) return;
       $("addStory").style.opacity=.4;
       try{
+        const isV=f.type.startsWith("video/");
+        if(!isV&&!f.type.startsWith("image/")){ alert("Please choose a photo or video"); $("addStory").style.opacity=1; return; }
+        if(f.size>MAX_MB*1024*1024){ alert("File is larger than "+MAX_MB+" MB."); $("addStory").style.opacity=1; return; }
         const url=await cloudUpload(f);
-        await addDoc(collection(db,"stories"),{url,name:myName,uid:myUid,createdAt:serverTimestamp()});
+        await addDoc(collection(db,"stories"),{url,kind:isV?"video":"image",name:myName,uid:myUid,createdAt:serverTimestamp()});
       }catch(err){ alert("Story failed: "+(err.message||err)); }
       $("addStory").style.opacity=1;
     };
@@ -629,7 +634,8 @@
         const f=arr[arr.length-1], all=arr.every(x=>seenSt.has(x.id));
         const it=document.createElement("div"); it.className="sItem";
         const c=document.createElement("div"); c.className="sCircle sRing"+(all?" seen":"");
-        c.style.setProperty("--img","url('"+f.url+"')");
+        const th=f.kind==="video"?f.url.replace("/upload/","/upload/so_0,w_200,h_200,c_fill/").replace(/\.[a-z0-9]+$/i,".jpg"):f.url;
+        c.style.setProperty("--img","url('"+th+"')");
         const n=document.createElement("span"); n.textContent=f.uid===myUid?"You":(f.name||"");
         it.append(c,n); it.onclick=()=>playStory(arr,0); box.appendChild(it);
       });
@@ -638,9 +644,13 @@
       playStory.o=playStory.o||$("viewer").onclick;
       if(i>=arr.length){ closeViewer(); return; }
       const x=arr[i]; seenSt.add(x.id); localStorage.setItem("jv_seen",JSON.stringify([...seenSt].slice(-300)));
-      showViewer(x.url,"📖 "+(x.name||"")+" · "+new Date(x.t).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+"  ("+(i+1)+"/"+arr.length+")",0,x.uid===myUid?()=>deleteDoc(doc(db,"stories",x.id)):null);
-      $("viewer").onclick=e=>{ if(e.target.id!=="viewDel") playStory(arr,i+1); };
-      vTimer=setTimeout(()=>playStory(arr,i+1),5000); drawStories();
+      const isV=x.kind==="video";
+      clearTimeout(vTimer);
+      showViewer(isV?mp4(x.url):x.url,"📖 "+(x.name||"")+" · "+new Date(x.t).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+"  ("+(i+1)+"/"+arr.length+")",0,x.uid===myUid?()=>deleteDoc(doc(db,"stories",x.id)):null,isV);
+      $("viewer").onclick=e=>{ if(e.target.id!=="viewDel"&&e.target.id!=="viewVid") playStory(arr,i+1); };
+      if(isV){ $("viewVid").onended=()=>playStory(arr,i+1); vTimer=setTimeout(()=>playStory(arr,i+1),120000); }
+      else vTimer=setTimeout(()=>playStory(arr,i+1),5000);
+      drawStories();
     }
 
     // reactions (double tap)
