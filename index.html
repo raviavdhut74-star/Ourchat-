@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -34,25 +34,37 @@
     <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="9" r="1.6"/><path d="M21 16l-5-5-8 8"/></symbol>
   </svg>
 
+  <div id="home">
+    <div class="header igHead">
+      <div class="logoT">Jivlag</div>
+      <div class="hactions"><button id="topChats" class="ib"><svg class="ic"><use href="#i-send"/></svg></button><button id="menuBtn" class="ib"><svg class="ic"><use href="#i-more"/></svg></button></div>
+      <div id="menu" hidden>
+        <button id="notifBtn">🔔 Notifications</button>
+        <button id="heartBtn" style="display:none">❤️</button>
+        <button id="darkBtn">🌙 Dark mode</button>
+        <button id="deleteAllBtn">🗑️ Delete my messages</button>
+        <button id="clearAllBtn" style="display:none">x</button>
+        <button id="logoutBtn">🚪 Logout</button>
+      </div>
+    </div>
+    <div id="storyBar">
+      <span id="snapBtn" hidden></span>
+      <div class="sItem" id="addStory"><div class="sCircle add"><svg class="ic"><use href="#i-plus"/></svg></div><span>Your story</span></div>
+      <div id="storyList"></div>
+    </div>
+    <div id="postFeed"></div>
+  </div>
+  <div id="chats" hidden><div class="ctitle">Chats</div><div id="chatList"></div></div>
+
+  <div id="chatScreen" hidden>
   <div class="header">
-    <div class="avatar"><img src="icon-192.png" alt="Jivlag"></div>
-    <div class="hinfo">
-      <div class="htitle">Jivlag <span id="streak"></span></div>
-      <div id="sub"></div>
-    </div>
+    <button id="chatBack" class="ib">←</button>
+    <div class="avatar" id="peerAv">?</div>
+    <div class="hinfo"><div class="htitle"><span id="peerName"></span> <span id="streak"></span></div><div id="sub"></div></div>
     <div class="hactions">
-      <button id="searchBtn" class="ib" title="Search"><svg class="ic"><use href="#i-search"/></svg></button>
-      <button id="voiceBtn" class="ib" title="Voice call"><svg class="ic"><use href="#i-phone"/></svg></button>
-      <button id="videoBtn" class="ib" title="Video call"><svg class="ic"><use href="#i-video"/></svg></button>
-      <button id="menuBtn" class="ib" title="Menu"><svg class="ic"><use href="#i-more"/></svg></button>
-    </div>
-    <div id="menu" hidden>
-      <button id="notifBtn">🔔 Notifications</button>
-      <button id="heartBtn">❤️ Miss you</button>
-      <button id="darkBtn">🌙 Dark mode</button>
-      <button id="deleteAllBtn">🗑️ Delete my messages</button>
-      <button id="clearAllBtn">🧹 Clear chat for everyone</button>
-      <button id="logoutBtn">🚪 Logout</button>
+      <button id="searchBtn" class="ib"><svg class="ic"><use href="#i-search"/></svg></button>
+      <button id="voiceBtn" class="ib"><svg class="ic"><use href="#i-phone"/></svg></button>
+      <button id="videoBtn" class="ib"><svg class="ic"><use href="#i-video"/></svg></button>
     </div>
   </div>
 
@@ -62,11 +74,6 @@
     <button id="searchClose" title="Close">✕</button>
   </div>
 
-  <div id="storyBar">
-    <div class="sItem" id="snapBtn"><div class="sCircle add"><svg class="ic"><use href="#i-camera"/></svg></div><span>Snap</span></div>
-    <div class="sItem" id="addStory"><div class="sCircle add"><svg class="ic"><use href="#i-plus"/></svg></div><span>Story</span></div>
-    <div id="storyList"></div>
-  </div>
 
   <div id="pinBar" hidden>
     <span>📌</span><span id="pinText"></span><button id="pinX" title="Unpin">✕</button>
@@ -85,11 +92,14 @@
     <button id="sendBtn" title="Send"><svg class="ic"><use href="#i-send"/></svg></button>
   </div>
 
+  </div>
+
   <nav id="nav">
-    <button id="navChat" class="on"><i><svg class="ic"><use href="#i-chat"/></svg></i>Chat</button>
-    <button id="galBtn"><i><svg class="ic"><use href="#i-grid"/></svg></i>Gallery</button>
+    <button id="navChat" class="on"><i><svg class="ic"><use href="#i-grid"/></svg></i>Home</button>
     <button id="reelsBtn"><i><svg class="ic"><use href="#i-film"/></svg></i>Reels</button>
-    <button id="postsBtn"><i><svg class="ic"><use href="#i-image"/></svg></i>Posts</button>
+    <button id="postsBtn"><i><svg class="ic"><use href="#i-plus"/></svg></i>Post</button>
+    <button id="navChats"><i><svg class="ic"><use href="#i-chat"/></svg></i>Chats</button>
+    <button id="galBtn"><i><svg class="ic"><use href="#i-image"/></svg></i>Gallery</button>
   </nav>
 
   <input type="file" id="snapInput" accept="image/*" capture="environment" hidden>
@@ -124,15 +134,7 @@
     <div id="galFeed"></div>
   </div>
 
-  <div id="posts" class="overlay" hidden>
-    <div id="postTop">
-      <button id="postBack" class="rb">←</button>
-      <span>Posts</span>
-      <button id="postAdd" class="rb"><svg class="ic"><use href="#i-plus"/></svg></button>
-    </div>
-    <div id="postFeed"></div>
-    <input type="file" id="postInput" accept="image/*,video/*" hidden>
-  </div>
+  <input type="file" id="postInput" accept="image/*,video/*" hidden>
 
   <div id="cmSheet" hidden>
     <div id="cmHead"><b>Comments</b><button id="cmClose">✕</button></div>
@@ -160,13 +162,13 @@
   <div id="callUI" class="overlay" hidden>
     <video id="remoteVideo" autoplay playsinline></video>
     <video id="localVideo" autoplay playsinline muted></video>
-    <div id="callInfo"></div>
-    <div class="callBtns"><button id="muteBtn">🎤</button><button id="endBtn">📵</button></div>
+    <div class="callTop"><div class="bigAv" id="callAv"></div><div id="callName"></div><div id="callInfo"></div></div>
+    <div class="callBtns"><button id="muteBtn">🎤</button><button id="camToggle">📷</button><button id="endBtn" class="red">📵</button></div>
   </div>
 
   <div id="incoming" class="overlay" hidden>
-    <div id="incomingText"></div>
-    <div class="callBtns"><button id="acceptBtn">✅</button><button id="declineBtn">❌</button></div>
+    <div class="callTop"><div class="bigAv ringing">📞</div><div id="incomingText"></div></div>
+    <div class="callBtns"><button id="declineBtn" class="red">📵</button><button id="acceptBtn" class="green">📞</button></div>
   </div>
 
   <div id="loginBox" class="overlay">
@@ -174,13 +176,15 @@
       <img class="loginLogo" src="icon-192.png" alt="">
       <div class="loginTitle">Jivlag</div>
       <input type="email" id="loginEmail" placeholder="Email" autocomplete="username">
+      <input type="text" id="regName" placeholder="Your name" hidden>
       <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
       <button id="loginBtn">Log in</button>
+      <button id="toggleReg" class="lnk">New here? Register (one time only)</button>
       <div id="loginErr"></div>
     </div>
   </div>
 
-  <script type="module" src="script.js?v=12"></script>
+  <script type="module" src="script.js?v=20"></script>
   <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 </body>
 </html>

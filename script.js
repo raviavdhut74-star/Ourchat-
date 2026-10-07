@@ -1,5 +1,5 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import {
       getFirestore, collection, addDoc, setDoc, updateDoc, query, orderBy, limit,
       onSnapshot, serverTimestamp, deleteDoc, doc, where, getDocs
@@ -30,7 +30,7 @@
     const callUI=$("callUI"), remoteVideo=$("remoteVideo"), localVideo=$("localVideo"), callInfo=$("callInfo");
     const incoming=$("incoming"), incomingText=$("incomingText");
 
-    let myName=null, myUid=null, started=false;
+    let myName=null, myUid=null, started=false, regMode=false, regName="", curPeer=null, curChat=null, presAll={}, usersMap={}, msgUnsub=null;
 
     onAuthStateChanged(auth,user=>{
       if(!user||user.isAnonymous){
@@ -40,24 +40,27 @@
       }
       $("loginBox").hidden=true;
       myUid=user.uid;
-      if(!myName){
-        myName=localStorage.getItem("ourchat_name");
-        if(!myName){
-          myName=(prompt("What is your name?")||"").trim()||"Me";
-          localStorage.setItem("ourchat_name",myName);
-        }
-      }
-      if(!started){ started=true; listenMessages(); listenCalls(); listenPresence(); listenExtras(); listenReels(); listenPosts(); }
+      myName=user.displayName||regName||localStorage.getItem("ourchat_name")||(user.email||"Me").split("@")[0];
+      localStorage.setItem("ourchat_name",myName);
+      setDoc(doc(db,"users",myUid),{uid:myUid,name:myName,email:user.email||""},{merge:true}).catch(()=>{});
+      if(!started){ started=true; listenUsers(); listenCalls(); listenPresence(); listenExtras(); listenReels(); listenPosts(); }
     });
 
     async function doLogin(){
       const em=$("loginEmail").value.trim(), pw=$("loginPass").value;
       if(!em||!pw)return;
       $("loginErr").textContent="";
-      try{ await signInWithEmailAndPassword(auth,em,pw); }
-      catch(e){ $("loginErr").textContent="Wrong email or password ("+e.code+")"; }
+      try{
+        if(regMode){
+          regName=$("regName").value.trim();
+          if(!regName){ $("loginErr").textContent="Enter your name"; return; }
+          const c=await createUserWithEmailAndPassword(auth,em,pw);
+          updateProfile(c.user,{displayName:regName}).catch(()=>{});
+        }else await signInWithEmailAndPassword(auth,em,pw);
+      }catch(e){ $("loginErr").textContent=(regMode?"Register failed (":"Wrong email or password (")+e.code+")"; }
     }
     $("loginBtn").onclick=doLogin;
+    $("toggleReg").onclick=()=>{ regMode=!regMode; $("regName").hidden=!regMode; $("loginBtn").textContent=regMode?"Register":"Log in"; $("toggleReg").textContent=regMode?"Already registered? Log in":"New here? Register (one time only)"; $("loginErr").textContent=""; };
     $("loginPass").addEventListener("keydown",e=>{ if(e.key==="Enter")doLogin(); });
     $("logoutBtn").onclick=async()=>{ if(confirm("Log out?")){ await signOut(auth); location.reload(); } };
 
@@ -69,9 +72,11 @@
       return d.toLocaleDateString([], {day:"numeric",month:"short",year:"numeric"});
     }
 
+    const tmv=d=>{ const c=d.data().createdAt; return c&&c.toMillis?c.toMillis():Date.now()+1e9; };
     function listenMessages(){
-      const q=query(collection(db,"messages"),orderBy("createdAt"),limit(200));
-      onSnapshot(q,snapshot=>{
+      if(msgUnsub) msgUnsub(); firstLoad=true; chat.innerHTML="";
+      const q=query(collection(db,"messages"),where("chatId","==",curChat));
+      msgUnsub=onSnapshot(q,snapshot=>{
         const isFirst=firstLoad; firstLoad=false;
         if(!isFirst) snapshot.docChanges().forEach(c=>{
           const d=c.doc.data();
@@ -81,7 +86,7 @@
         if(snapshot.empty){ galleryItems=[]; drawPin(null); chat.innerHTML='<div id="status">No messages yet ❤️</div>'; return; }
 
         let lastDay=""; const dayMap={}; const media=[]; let pinNow=null;
-        snapshot.forEach(messageDoc=>{
+        snapshot.docs.slice().sort((a,b)=>tmv(a)-tmv(b)).slice(-200).forEach(messageDoc=>{
           const data=messageDoc.data();
           const mine=data.uid===myUid;
           if(data.pinned) pinNow={id:messageDoc.id,data};
@@ -245,7 +250,7 @@
     async function setupMedia(video){
       localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:video?{facingMode:"user"}:false});
       localVideo.srcObject=localStream;
-      localVideo.style.display=video?"block":"none";
+      localVideo.style.display=video?"block":"none"; callUI.classList.toggle("vid",!!video); $("camToggle").style.display=video?"":"none";
       $("muteBtn").textContent="🎤";
     }
 
@@ -257,7 +262,7 @@
       pc.ontrack=e=>e.streams[0].getTracks().forEach(t=>remote.addTrack(t));
       pc.onconnectionstatechange=()=>{
         if(!pc)return;
-        if(pc.connectionState==="connected") callInfo.textContent="🔴 Live";
+        if(pc.connectionState==="connected") startTimer();
         if(pc.connectionState==="failed") endCall(true);
       };
     }
@@ -268,14 +273,22 @@
     }
     function flushCands(){ pending.forEach(c=>pc.addIceCandidate(c).catch(()=>{})); pending=[]; }
 
-    function showCallUI(text){ callInfo.textContent=text; callUI.hidden=false; }
+    function showCallUI(text,name){ callInfo.textContent=text; $("callName").textContent=name||""; $("callAv").textContent=(name||"?").charAt(0).toUpperCase(); callUI.hidden=false; }
+    let callT=null, ringI=null;
+    function startTimer(){ if(callT) return; const t0=Date.now(); callT=setInterval(()=>{ const n=Math.floor((Date.now()-t0)/1000); callInfo.textContent=String(Math.floor(n/60)).padStart(2,"0")+":"+String(n%60).padStart(2,"0"); },1000); }
+    function startRing(){
+      stopRing();
+      const beep=()=>{ if(navigator.vibrate) navigator.vibrate([400,200,400]); if(!actx) return; [0,.45].forEach(o=>{ const x=actx.createOscillator(), g=actx.createGain(); x.frequency.value=o?520:440; g.gain.value=.12; x.connect(g); g.connect(actx.destination); x.start(actx.currentTime+o); x.stop(actx.currentTime+o+.35); }); };
+      beep(); ringI=setInterval(beep,2500);
+    }
+    function stopRing(){ clearInterval(ringI); ringI=null; if(navigator.vibrate) navigator.vibrate(0); }
 
     async function startCall(video){
-      if(pc||!myUid)return;
+      if(pc||!myUid||!curPeer){ toast("Open a chat to call"); return; }
       try{ await setupMedia(video); }
       catch(e){ alert("Mic/Camera permission denied: "+e.name); return; }
 
-      showCallUI("Calling...");
+      showCallUI("Calling...",curPeer.name);
       createPC();
       callRef=doc(collection(db,"calls"));
       const callerCands=collection(callRef,"callerCandidates");
@@ -286,7 +299,7 @@
         const offer=await pc.createOffer();
         await pc.setLocalDescription(offer);
         await setDoc(callRef,{
-          from:myUid,name:myName,video,status:"ringing",createdAt:Date.now(),
+          from:myUid,to:curPeer.uid,name:myName,video,status:"ringing",createdAt:Date.now(),
           offer:{type:offer.type,sdp:offer.sdp}
         });
       }catch(e){ alert("Call failed: "+(e.code||e.message)); endCall(false); return; }
@@ -310,12 +323,12 @@
     async function acceptCall(){
       if(!incomingCall)return;
       const {ref,data}=incomingCall;
-      incomingCall=null; incoming.hidden=true;
+      incomingCall=null; incoming.hidden=true; stopRing();
       try{ await setupMedia(data.video); }
       catch(e){ alert("Mic/Camera permission denied: "+e.name); updateDoc(ref,{status:"declined"}); return; }
 
       callRef=ref;
-      showCallUI("Connecting...");
+      showCallUI("Connecting...",data.name);
       createPC();
       const callerCands=collection(ref,"callerCandidates");
       const calleeCands=collection(ref,"calleeCandidates");
@@ -335,7 +348,7 @@
     function declineCall(){
       if(!incomingCall)return;
       updateDoc(incomingCall.ref,{status:"declined"}).catch(()=>{});
-      incomingCall=null; incoming.hidden=true;
+      incomingCall=null; incoming.hidden=true; stopRing();
     }
 
     function endCall(notify){
@@ -346,7 +359,7 @@
       if(pc){ pc.onicecandidate=null; pc.onconnectionstatechange=null; pc.close(); }
       pc=null; localStream=null; callRef=null; answered=false;
       remoteVideo.srcObject=null; localVideo.srcObject=null;
-      callUI.hidden=true;
+      callUI.hidden=true; clearInterval(callT); callT=null;
     }
 
     function listenCalls(){
@@ -354,13 +367,13 @@
       onSnapshot(q,snap=>{
         snap.docChanges().forEach(c=>{
           const d=c.doc.data();
-          if(c.type==="added"&&d.from!==myUid&&!pc&&!incomingCall&&Date.now()-d.createdAt<90000){
+          if(c.type==="added"&&d.to===myUid&&!pc&&!incomingCall&&Date.now()-d.createdAt<90000){
             incomingCall={ref:c.doc.ref,data:d,id:c.doc.id};
             incomingText.textContent=(d.video?"🎥 Video call":"📞 Voice call")+" — "+(d.name||"");
-            incoming.hidden=false;
+            incoming.hidden=false; startRing();
           }
           if(c.type==="removed"&&incomingCall&&incomingCall.id===c.doc.id){
-            incomingCall=null; incoming.hidden=true;
+            incomingCall=null; incoming.hidden=true; stopRing();
           }
         });
       },()=>{});
@@ -371,6 +384,7 @@
     $("endBtn").onclick=()=>endCall(true);
     $("acceptBtn").onclick=acceptCall;
     $("declineBtn").onclick=declineCall;
+    $("camToggle").onclick=()=>{ const t=localStream&&localStream.getVideoTracks()[0]; if(!t) return; t.enabled=!t.enabled; $("camToggle").textContent=t.enabled?"📷":"🚫"; };
     $("muteBtn").onclick=()=>{
       if(!localStream)return;
       const t=localStream.getAudioTracks()[0];
@@ -383,7 +397,8 @@
     let galleryItems=[], firstLoad=true, other=null, replyTo=null, typingOn=false, tt=null, actx=null, rec=null, chunks=[];
 
     function addMsg(o){
-      const m={...o,name:myName,uid:myUid,createdAt:serverTimestamp()};
+      if(!curChat) return Promise.reject({code:"open a chat first"});
+      const m={...o,chatId:curChat,name:myName,uid:myUid,createdAt:serverTimestamp()};
       if(replyTo){ m.replyTo=replyTo; clearReply(); }
       return addDoc(collection(db,"messages"),m);
     }
@@ -420,9 +435,9 @@
     }
     function listenPresence(){
       onSnapshot(collection(db,"presence"),snap=>{
-        other=null;
-        snap.forEach(d=>{ if(d.id!==myUid) other=d.data(); });
-        updateSub(); updateTicks();
+        snap.forEach(d=>{ presAll[d.id]=d.data(); });
+        other=curPeer?presAll[curPeer.uid]||null:null;
+        updateSub(); updateTicks(); drawChats();
       },()=>{});
       setPresence({lastRead:Date.now(),typing:false});
       setInterval(()=>{ if(!document.hidden) setPresence({}); updateSub(); },30000);
@@ -522,7 +537,7 @@
         s.forEach(d=>{ const r=d.data(); (reacts[r.msgId]=reacts[r.msgId]||{})[r.uid]=r.emoji; });
         updateReacts();
       },()=>{});
-      onSnapshot(query(collection(db,"stories"),orderBy("createdAt"),limit(30)),s=>{
+      onSnapshot(query(collection(db,"stories"),orderBy("createdAt","desc"),limit(80)),s=>{
         stories=[];
         s.forEach(d=>{
           const x=d.data();
@@ -549,7 +564,7 @@
         },1000);
       }
     }
-    function closeViewer(){ clearInterval(vTimer); $("viewer").hidden=true; $("viewImg").src=""; }
+    function closeViewer(){ clearInterval(vTimer); $("viewer").hidden=true; $("viewImg").src=""; if(playStory.o) $("viewer").onclick=playStory.o; }
     $("viewer").onclick=e=>{ if(e.target.id!=="viewDel") closeViewer(); };
 
     // view-once snap
@@ -588,18 +603,26 @@
       }catch(err){ alert("Story failed: "+(err.message||err)); }
       $("addStory").style.opacity=1;
     };
+    let seenSt=new Set(JSON.parse(localStorage.getItem("jv_seen")||"[]"));
     function drawStories(){
       const box=$("storyList"); box.innerHTML="";
-      stories.slice().reverse().forEach(s=>{
+      const g={}; stories.slice().sort((a,b)=>a.t-b.t).forEach(x=>(g[x.uid]=g[x.uid]||[]).push(x));
+      Object.values(g).sort((a,b)=>(b[0].uid===myUid)-(a[0].uid===myUid)).forEach(arr=>{
+        const f=arr[arr.length-1], all=arr.every(x=>seenSt.has(x.id));
         const it=document.createElement("div"); it.className="sItem";
-        const c=document.createElement("div"); c.className="sCircle sRing";
-        c.style.setProperty("--img","url('"+s.url+"')");
-        const n=document.createElement("span"); n.textContent=s.uid===myUid?"You":(s.name||"");
-        it.appendChild(c); it.appendChild(n);
-        const cap="📖 "+(s.name||"")+" · "+new Date(s.t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
-        it.onclick=()=>showViewer(s.url,cap,0,s.uid===myUid?()=>deleteDoc(doc(db,"stories",s.id)):null);
-        box.appendChild(it);
+        const c=document.createElement("div"); c.className="sCircle sRing"+(all?" seen":"");
+        c.style.setProperty("--img","url('"+f.url+"')");
+        const n=document.createElement("span"); n.textContent=f.uid===myUid?"You":(f.name||"");
+        it.append(c,n); it.onclick=()=>playStory(arr,0); box.appendChild(it);
       });
+    }
+    function playStory(arr,i){
+      playStory.o=playStory.o||$("viewer").onclick;
+      if(i>=arr.length){ closeViewer(); return; }
+      const x=arr[i]; seenSt.add(x.id); localStorage.setItem("jv_seen",JSON.stringify([...seenSt].slice(-300)));
+      showViewer(x.url,"📖 "+(x.name||"")+" · "+new Date(x.t).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+"  ("+(i+1)+"/"+arr.length+")",0,x.uid===myUid?()=>deleteDoc(doc(db,"stories",x.id)):null);
+      $("viewer").onclick=e=>{ if(e.target.id!=="viewDel") playStory(arr,i+1); };
+      vTimer=setTimeout(()=>playStory(arr,i+1),5000); drawStories();
     }
 
     // reactions (double tap)
@@ -747,6 +770,7 @@
       clearTimeout(toast.t); toast.t=setTimeout(()=>{ el.hidden=true; },2200);
     }
     function shareToChat(msg){
+      if(!curChat){ toast("Open a chat first, then share"); return; }
       addMsg(msg).then(()=>toast("Sent to chat ✅")).catch(e=>alert("Share failed: "+e.code));
     }
     function actBtn(txt,fn){ const b=document.createElement("button"); b.textContent=txt; b.onclick=fn; return b; }
@@ -763,7 +787,7 @@
     function listenPosts(){
       onSnapshot(query(collection(db,"posts"),orderBy("createdAt","desc"),limit(30)),s=>{
         postList=[]; s.forEach(d=>postList.push({id:d.id,...d.data()}));
-        if(!$("posts").hidden) drawPosts();
+        drawPosts();
       },()=>{});
       onSnapshot(query(collection(db,"comments"),orderBy("createdAt"),limit(300)),s=>{
         comments={};
@@ -775,7 +799,7 @@
     function drawPosts(){
       const feed=$("postFeed"); feed.innerHTML="";
       if(!postList.length){
-        feed.innerHTML='<div class="reelEmpty">No posts yet<br>Tap ➕ above to add the first photo</div>';
+        feed.innerHTML='<div class="reelEmpty">No posts yet<br>Tap ➕ Post below to add the first photo</div>';
         return;
       }
       postList.forEach(p=>{
@@ -844,23 +868,21 @@
     $("cmClose").onclick=()=>{ $("cmSheet").hidden=true; cmTarget=null; };
 
     // posts upload
-    $("postsBtn").onclick=()=>{ $("posts").hidden=false; drawPosts(); };
-    $("postBack").onclick=()=>{ $("posts").hidden=true; };
-    $("postAdd").onclick=()=>$("postInput").click();
-    $("postInput").onchange=async e=>{
+    $("postsBtn").onclick=()=>$("postInput").click();
+            $("postInput").onchange=async e=>{
       const f=e.target.files[0]; e.target.value="";
       if(!f||!myUid) return;
       const isV=f.type.startsWith("video/");
       if(!isV&&!f.type.startsWith("image/")){ alert("Please choose a photo or video"); return; }
       if(f.size>MAX_MB*1024*1024){ alert("File is larger than "+MAX_MB+" MB."); return; }
       const cap=prompt("Caption (leave empty for none)")||"";
-      $("postAdd").style.opacity=.4;
+      $("postsBtn").style.opacity=.4;
       try{
         const url=await cloudUpload(f);
         await addDoc(collection(db,"posts"),{url,kind:isV?"video":"image",caption:cap.slice(0,200),name:myName,uid:myUid,createdAt:serverTimestamp()});
         toast("Post added ✅");
       }catch(err){ alert("Post failed: "+(err.message||err)); }
-      $("postAdd").style.opacity=1;
+      $("postsBtn").style.opacity=1;
     };
 
     /* ================= MESSAGE ACTIONS: reply / copy / forward / pin / edit / delete ================= */
@@ -1018,3 +1040,37 @@
       }catch(e){ alert("Delete All failed: "+e.code); }
     };
   
+
+    /* ================= USERS / CHAT LIST / NAV ================= */
+    function listenUsers(){
+      onSnapshot(collection(db,"users"),s=>{ usersMap={}; s.forEach(d=>{ usersMap[d.id]=d.data(); }); drawChats(); },()=>{});
+      listenPresence(); listenExtras(); listenReels(); listenPosts();
+    }
+    function drawChats(){
+      const box=$("chatList"); if(!box) return; box.innerHTML="";
+      const arr=Object.values(usersMap).filter(u=>u.uid!==myUid);
+      if(!arr.length){ box.innerHTML='<div class="reelEmpty">No other users yet<br>Ask friends to register</div>'; return; }
+      arr.forEach(u=>{
+        const p=presAll[u.uid]||{}, on=Date.now()-(p.lastActive||0)<75000;
+        const r=document.createElement("div"); r.className="cRow";
+        r.innerHTML='<span class="pAv"></span><div><b></b><small></small></div>';
+        r.querySelector(".pAv").textContent=(u.name||"?").charAt(0).toUpperCase();
+        r.querySelector("b").textContent=u.name||"";
+        r.querySelector("small").textContent=on?"🟢 online":"tap to chat";
+        r.onclick=()=>openChat(u); box.appendChild(r);
+      });
+    }
+    function openChat(u){
+      curPeer=u; curChat=[myUid,u.uid].sort().join("_");
+      $("peerName").textContent=u.name||""; $("peerAv").textContent=(u.name||"?").charAt(0).toUpperCase();
+      other=presAll[u.uid]||null; updateSub();
+      $("chatScreen").hidden=false; listenMessages();
+    }
+    $("chatBack").onclick=()=>{ if(msgUnsub){ msgUnsub(); msgUnsub=null; } curChat=null; curPeer=null; other=null; $("chatScreen").hidden=true; };
+    function showTab(t){
+      $("home").hidden=t!=="home"; $("chats").hidden=t!=="chats";
+      $("navChat").classList.toggle("on",t==="home"); $("navChats").classList.toggle("on",t==="chats");
+    }
+    $("navChat").onclick=()=>showTab("home");
+    $("navChats").onclick=()=>showTab("chats");
+    $("topChats").onclick=()=>showTab("chats");
