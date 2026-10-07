@@ -1,5 +1,5 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail, deleteUser, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import {
       getFirestore, collection, addDoc, setDoc, updateDoc, query, orderBy, limit,
       onSnapshot, serverTimestamp, deleteDoc, doc, where, getDocs
@@ -30,7 +30,7 @@
     const callUI=$("callUI"), remoteVideo=$("remoteVideo"), localVideo=$("localVideo"), callInfo=$("callInfo");
     const incoming=$("incoming"), incomingText=$("incomingText");
 
-    let myName=null, myUid=null, started=false, regMode=false, regName="", curPeer=null, curChat=null, presAll={}, usersMap={}, msgUnsub=null;
+    let myName=null, myUid=null, started=false, regMode=false, regName="", profUid=null, followsAll=[], curPeer=null, curChat=null, presAll={}, usersMap={}, msgUnsub=null;
 
     onAuthStateChanged(auth,user=>{
       $("splash").hidden=true;
@@ -44,24 +44,41 @@
       myName=user.displayName||regName||localStorage.getItem("ourchat_name")||(user.email||"Me").split("@")[0];
       localStorage.setItem("ourchat_name",myName);
       setDoc(doc(db,"users",myUid),{uid:myUid,name:myName,email:user.email||""},{merge:true}).catch(()=>{});
-      if(!started){ started=true; listenUsers(); listenCalls(); listenPresence(); listenCallLog(); listenExtras(); listenReels(); listenPosts(); }
+      if(!started){ started=true; listenUsers(); listenCalls(); listenFollows(); listenPresence(); listenCallLog(); listenExtras(); listenReels(); listenPosts(); }
     });
 
+    const keyOf=v=>{ v=v.trim().toLowerCase(); return /^[\d+\s-]{7,}$/.test(v)?v.replace(/\D/g,""):v.replace(/^@/,""); };
+    async function resolveEmail(v){
+      if(v.includes("@")&&v.includes(".")) return v.trim();
+      const d=await getDoc(doc(db,"logins",keyOf(v))); return d.exists()?d.data().email:null;
+    }
     async function doLogin(){
-      const em=$("loginEmail").value.trim(), pw=$("loginPass").value;
-      if(!em||!pw)return;
-      $("loginErr").textContent="";
+      const idv=$("loginEmail").value.trim(), pw=$("loginPass").value, err=$("loginErr");
+      if(!idv||!pw)return; err.textContent="";
       try{
         if(regMode){
-          regName=$("regName").value.trim();
-          if(!regName){ $("loginErr").textContent="Enter your name"; return; }
-          const c=await createUserWithEmailAndPassword(auth,em,pw);
+          regName=$("regName").value.trim(); const un=keyOf($("regUser").value).replace(/[^a-z0-9._]/g,""), ph=keyOf($("regPhone").value);
+          if(!regName||un.length<3){ err.textContent="Enter name and username (min 3)"; return; }
+          if(!idv.includes("@")){ err.textContent="Enter a valid email"; return; }
+          const c=await createUserWithEmailAndPassword(auth,idv,pw);
+          if((await getDoc(doc(db,"logins",un))).exists()){ await deleteUser(c.user); err.textContent="Username already taken"; return; }
+          await setDoc(doc(db,"logins",un),{email:idv,uid:c.user.uid});
+          if(/^\d{7,}$/.test(ph)) setDoc(doc(db,"logins",ph),{email:idv,uid:c.user.uid}).catch(()=>{});
           updateProfile(c.user,{displayName:regName}).catch(()=>{});
-        }else await signInWithEmailAndPassword(auth,em,pw);
-      }catch(e){ $("loginErr").textContent=(regMode?"Register failed (":"Wrong email or password (")+e.code+")"; }
+          setDoc(doc(db,"users",c.user.uid),{username:un,phone:ph,name:regName},{merge:true});
+        }else{
+          const em=await resolveEmail(idv); if(!em){ err.textContent="No account found"; return; }
+          await signInWithEmailAndPassword(auth,em,pw);
+        }
+      }catch(e){ err.textContent=(regMode?"Register failed (":"Wrong password or account (")+e.code+")"; }
     }
+    $("forgotBtn").onclick=async()=>{
+      const idv=$("loginEmail").value.trim(), err=$("loginErr"); if(!idv){ err.textContent="Enter email / username / mobile first"; return; }
+      try{ const em=await resolveEmail(idv); if(!em){ err.textContent="No account found"; return; } await sendPasswordResetEmail(auth,em); err.textContent="✅ Reset link sent to "+em; }
+      catch(e){ err.textContent="Failed ("+e.code+")"; }
+    };
     $("loginBtn").onclick=doLogin;
-    $("toggleReg").onclick=()=>{ regMode=!regMode; $("regName").hidden=!regMode; $("loginBtn").textContent=regMode?"Register":"Log in"; $("toggleReg").textContent=regMode?"Already registered? Log in":"New here? Register (one time only)"; $("loginErr").textContent=""; };
+    $("toggleReg").onclick=()=>{ regMode=!regMode; $("regName").hidden=!regMode; $("regUser").hidden=!regMode; $("regPhone").hidden=!regMode; $("forgotBtn").hidden=regMode; $("loginBtn").textContent=regMode?"Register":"Log in"; $("toggleReg").textContent=regMode?"Already registered? Log in":"New here? Register (one time only)"; $("loginErr").textContent=""; };
     $("loginPass").addEventListener("keydown",e=>{ if(e.key==="Enter")doLogin(); });
     $("logoutBtn").onclick=async()=>{ if(confirm("Log out?")){ await signOut(auth); location.reload(); } };
 
@@ -1061,7 +1078,7 @@
         setAv(r.querySelector(".pAv"),u);
         r.querySelector("b").textContent=u.name||"";
         r.querySelector("small").textContent=on?"🟢 online":(u.bio||"tap to chat");
-        r.append(callBtn("📞",u,false),callBtn("🎥",u,true));
+        const pb=document.createElement("button"); pb.className="cBtn"; pb.textContent="👤"; pb.onclick=e=>{ e.stopPropagation(); profUid=u.uid; showTab("prof"); }; r.append(pb,callBtn("📞",u,false),callBtn("🎥",u,true));
         r.onclick=()=>openChat(u); box.appendChild(r);
       });
     }
@@ -1078,25 +1095,32 @@
       $("navChat").classList.toggle("on",t==="home"); $("navChats").classList.toggle("on",t==="chats");
     }
     $("navChat").onclick=()=>showTab("home");
-    $("navProf").onclick=()=>showTab("prof");
+    $("navProf").onclick=()=>{ profUid=myUid; showTab("prof"); };
     $("galMenu").onclick=()=>$("galBtn").onclick();
     $("navChats").onclick=()=>showTab("chats");
 
+    function listenFollows(){ onSnapshot(collection(db,"follows"),sn=>{ followsAll=[]; sn.forEach(d=>followsAll.push(d.data())); if(!$("prof").hidden) drawProf(); },()=>{}); }
     function drawProf(){
-      const u=usersMap[myUid]||{name:myName}, mine=postList.filter(p=>p.uid===myUid);
-      setAv($("profAv"),u); $("profUser").textContent=(u.name||myName||"").toLowerCase().replace(/\s+/g,"_");
-      $("profNameShow").textContent=u.name||myName||""; $("profBioShow").textContent=u.bio||"";
-      $("stPosts").textContent=mine.length; $("stReels").textContent=reelList.filter(r=>r.uid===myUid).length; $("stStories").textContent=stories.filter(x=>x.uid===myUid).length;
-      if(!$("profForm").hidden===false){ $("profName").value=u.name||myName||""; $("profBio").value=u.bio||""; }
+      profUid=profUid||myUid; const me=profUid===myUid;
+      const u=usersMap[profUid]||(me?{name:myName}:{}), mine=postList.filter(p=>p.uid===profUid);
+      setAv($("profAv"),u); $("profUser").textContent=u.username||(u.name||"").toLowerCase().replace(/\s+/g,"_");
+      $("profNameShow").textContent=u.name||""; $("profBioShow").textContent=u.bio||"";
+      $("stPosts").textContent=mine.length; $("stFollowers").textContent=followsAll.filter(f=>f.to===profUid).length; $("stFollowing").textContent=followsAll.filter(f=>f.from===profUid).length;
+      $("profBack").hidden=me; $("profEdit").hidden=!me; $("profPhotoBtn").hidden=!me; $("profFollow").hidden=me; if(!me) $("profForm").hidden=true;
+      const fl=followsAll.some(f=>f.from===myUid&&f.to===profUid); $("profFollow").textContent=fl?"Following ✓":"Follow";
       const g=$("profGrid"); g.innerHTML="";
       if(!mine.length){ g.innerHTML='<div class="reelEmpty">No posts yet</div>'; return; }
       mine.forEach(p=>{
         const c=document.createElement("div"); c.className="gCell";
-        if(p.kind==="video"){ const v=document.createElement("video"); v.src=mp4(p.url); v.muted=true; v.preload="metadata"; v.playsInline=true; c.append(v); c.onclick=()=>{ showTab("home"); }; }
+        if(p.kind==="video"){ const v=document.createElement("video"); v.src=mp4(p.url); v.muted=true; v.preload="metadata"; v.playsInline=true; c.append(v); c.onclick=()=>showTab("home"); }
         else{ const im=document.createElement("img"); im.src=p.url; im.loading="lazy"; c.append(im); c.onclick=()=>showViewer(p.url,p.caption||"",0,null); }
+        if(me){ const x=document.createElement("button"); x.className="gDel"; x.textContent="🗑"; x.onclick=ev=>{ ev.stopPropagation(); if(confirm("Delete this post?")) deleteDoc(doc(db,"posts",p.id)).catch(er=>alert("Failed: "+er.code)); }; c.append(x); }
         g.appendChild(c);
       });
     }
+    $("profBack").onclick=()=>{ profUid=myUid; showTab("chats"); };
+    $("profFollow").onclick=()=>{ const id=myUid+"_"+profUid, r=doc(db,"follows",id);
+      if(followsAll.some(f=>f.from===myUid&&f.to===profUid)) deleteDoc(r); else setDoc(r,{from:myUid,to:profUid}); };
     $("profEdit").onclick=()=>{ const f=$("profForm"); f.hidden=!f.hidden; $("profEdit").textContent=f.hidden?"Edit profile":"Cancel"; if(!f.hidden){ const u=usersMap[myUid]||{}; $("profName").value=u.name||myName||""; $("profBio").value=u.bio||""; } };
     $("profPhotoBtn").onclick=()=>$("profPhoto").click();
     $("profPhoto").onchange=async e=>{

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache">
   <meta charset="UTF-8">
   <title>Jivlag</title>
   <meta name="theme-color" content="#f6f4fa">
@@ -11,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=1791366407">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -57,11 +58,11 @@
   </div>
   <div id="chats" hidden><div class="ctitle">Chats</div><div id="chatList"></div><div class="ctitle">Calls</div><div id="callLog"></div></div>
   <div id="prof" hidden>
-    <div class="header igHead"><div class="logoT" id="profUser"></div></div>
+    <div class="header igHead"><button id="profBack" class="ib" hidden>←</button><div class="logoT" id="profUser"></div></div>
     <div class="pTop"><div class="bigAv" id="profAv"></div>
-      <div class="pStats"><div><b id="stPosts">0</b>Posts</div><div><b id="stReels">0</b>Reels</div><div><b id="stStories">0</b>Stories</div></div></div>
+      <div class="pStats"><div><b id="stPosts">0</b>Posts</div><div><b id="stFollowers">0</b>Followers</div><div><b id="stFollowing">0</b>Following</div></div></div>
     <div class="pInfo"><b id="profNameShow"></b><div id="profBioShow"></div></div>
-    <div class="pBtns"><button id="profEdit">Edit profile</button><button id="profPhotoBtn">Change photo</button></div>
+    <div class="pBtns"><button id="profEdit">Edit profile</button><button id="profPhotoBtn">Change photo</button><button id="profFollow" hidden>Follow</button></div>
     <input type="file" id="profPhoto" accept="image/*" hidden>
     <div id="profForm" hidden><input id="profName" placeholder="Name" maxlength="30"><input id="profBio" placeholder="Bio" maxlength="80"><button id="profSave" class="saveBtn">Save</button></div>
     <div class="pGrid" id="profGrid"></div>
@@ -188,16 +189,19 @@
     <div class="loginCard">
       <img class="loginLogo" src="icon-192.png" alt="">
       <div class="loginTitle">Jivlag</div>
-      <input type="email" id="loginEmail" placeholder="Email" autocomplete="username">
+      <input type="text" id="loginEmail" placeholder="Email / username / mobile" autocomplete="username" autocapitalize="none">
       <input type="text" id="regName" placeholder="Your name" hidden>
+      <input type="text" id="regUser" placeholder="Username (e.g. ravi_74)" autocapitalize="none" hidden>
+      <input type="tel" id="regPhone" placeholder="Mobile number (optional)" hidden>
       <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
       <button id="loginBtn">Log in</button>
+      <button id="forgotBtn" class="lnk">Forgot password?</button>
       <button id="toggleReg" class="lnk">New here? Register (one time only)</button>
       <div id="loginErr"></div>
     </div>
   </div>
 
-  <script type="module" src="script.js?v=20"></script>
+  <script type="module" src="script.js?v=1791366407"></script>
   <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 </body>
 </html>
