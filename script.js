@@ -86,6 +86,7 @@
     /* ================= BLOCK / SAVED / HISTORY ================= */
     let myBlocks=new Set(), blockedMe=new Set(), savedMap={}, histList=[], hubMode="saved";
     const isHidden=uid=>!!uid&&(myBlocks.has(uid)||blockedMe.has(uid));
+    const canChat=uid=>followsAll.some(f=>(f.from===myUid&&f.to===uid)||(f.from===uid&&f.to===myUid));
 
     function listenBlocks(){
       onSnapshot(query(collection(db,"blocks"),where("by","==",myUid)),s=>{ myBlocks=new Set(); s.forEach(d=>myBlocks.add(d.data().who)); afterBlock(); },()=>{});
@@ -1475,25 +1476,26 @@
       listenPresence(); listenExtras(); listenReels(); listenPosts();
     }
     function setAv(el,u){ u=u||{}; el.style.backgroundImage=u.photo?"url('"+u.photo+"')":""; el.style.backgroundSize="cover"; el.textContent=u.photo?"":(u.name||"?").charAt(0).toUpperCase(); }
-    function callBtn(txt,u,v){ const b=document.createElement("button"); b.textContent=txt; b.className="cBtn"; b.onclick=e=>{ e.stopPropagation(); openChat(u); startCall(v); }; return b; }
+    function callBtn(txt,u,v){ const b=document.createElement("button"); b.textContent=txt; b.className="cBtn"; b.onclick=e=>{ e.stopPropagation(); if(!canChat(u.uid)){ toast("Follow this person first"); return; } openChat(u); startCall(v); }; return b; }
     function drawChats(){
       const box=$("chatList"); if(!box) return; box.innerHTML="";
       { const raw=($("userSearch").value||"").trim(); if(raw.length>1&&raw[0]==="#"){ clearTimeout(drawChats.t); drawChats.t=setTimeout(()=>drawTags(raw.slice(1).toLowerCase()),300); return; } }
       const q=($("userSearch").value||"").trim().toLowerCase().replace(/^@/,"");
-      const arr=Object.values(usersMap).filter(u=>u.uid!==myUid&&!isHidden(u.uid)&&(!q||((u.name||"")+" "+(u.username||"")).toLowerCase().includes(q)));
-      if(!arr.length){ box.innerHTML='<div class="reelEmpty">No other users yet<br>Ask friends to register</div>'; return; }
+      const arr=Object.values(usersMap).filter(u=>u.uid!==myUid&&!isHidden(u.uid)&&(q||canChat(u.uid))&&(!q||((u.name||"")+" "+(u.username||"")).toLowerCase().includes(q)));
+      if(!arr.length){ box.innerHTML=q?'<div class="reelEmpty">No users found</div>':'<div class="reelEmpty">No chats yet<br>Search a user and follow them to start chatting</div>'; return; }
       arr.forEach(u=>{
         const p=presAll[u.uid]||{}, on=Date.now()-(p.lastActive||0)<75000;
         const r=document.createElement("div"); r.className="cRow";
         r.innerHTML='<span class="pAv"></span><div><b></b><small></small></div>';
         setAv(r.querySelector(".pAv"),u);
         r.querySelector("b").textContent=u.name||"";
-        r.querySelector("small").textContent=on?"🟢 online":((u.username?"@"+u.username:"tap to chat")+(u.bio?" · "+u.bio:""));
+        r.querySelector("small").textContent=on?"🟢 online":((u.username?"@"+u.username:(canChat(u.uid)?"tap to chat":"follow to chat"))+(u.bio?" · "+u.bio:""));
         const pb=document.createElement("button"); pb.className="cBtn"; pb.textContent="👤"; pb.onclick=e=>{ e.stopPropagation(); profUid=u.uid; logHist("profile",u.uid,{uid:u.uid,name:u.name||""}); showTab("prof"); }; r.append(pb,callBtn("📞",u,false),callBtn("🎥",u,true));
         r.onclick=()=>openChat(u); box.appendChild(r);
       });
     }
     function openChat(u){
+      if(!canChat(u.uid)){ toast("Follow this person first to chat"); return; }
       if(isHidden(u.uid)){ toast("You can't chat with this account"); return; }
       curPeer=u; curChat=[myUid,u.uid].sort().join("_");
       $("peerName").textContent=u.name||""; setAv($("peerAv"),u);
@@ -1511,7 +1513,7 @@
     $("galMenu").onclick=()=>$("galBtn").onclick();
     $("navChats").onclick=()=>showTab("chats");
 
-    function listenFollows(){ onSnapshot(collection(db,"follows"),sn=>{ followsAll=[]; sn.forEach(d=>followsAll.push(d.data())); applyVis(); if(!$("prof").hidden) drawProf(); },()=>{}); }
+    function listenFollows(){ onSnapshot(collection(db,"follows"),sn=>{ followsAll=[]; sn.forEach(d=>followsAll.push(d.data())); applyVis(); drawChats(); if(curPeer&&!canChat(curPeer.uid)) $("chatBack").click(); if(!$("prof").hidden) drawProf(); },()=>{}); }
     function drawProf(){
       profUid=profUid||myUid; const me=profUid===myUid;
       const u=usersMap[profUid]||(me?{name:myName}:{}), mine=postList.filter(p=>p.uid===profUid);
@@ -1520,7 +1522,7 @@
       $("stPosts").textContent=mine.length; $("stFollowers").textContent=followsAll.filter(f=>f.to===profUid).length; $("stFollowing").textContent=followsAll.filter(f=>f.from===profUid).length;
       $("profBack").hidden=me; $("profEdit").hidden=!me; $("profPhotoBtn").hidden=!me; $("profFollow").hidden=me; if(!me) $("profForm").hidden=true;
       const fl=followsAll.some(f=>f.from===myUid&&f.to===profUid); $("profFollow").textContent=fl?"Following ✓":(reqOut.has(profUid)?"Requested":"Follow"); $("profMore").hidden=me;
-      $("profMsg").hidden=me||isHidden(profUid); $("profBlock").hidden=me; $("profBlock").textContent=myBlocks.has(profUid)?"Unblock":"Block"; $("tabPosts").classList.toggle("on",profTab==="posts"); $("tabReels").classList.toggle("on",profTab==="reels");
+      $("profMsg").hidden=me||isHidden(profUid)||!canChat(profUid); $("profBlock").hidden=me; $("profBlock").textContent=myBlocks.has(profUid)?"Unblock":"Block"; $("tabPosts").classList.toggle("on",profTab==="posts"); $("tabReels").classList.toggle("on",profTab==="reels");
       const items=profTab==="reels"?reelList.filter(r=>r.uid===profUid):mine;
       const g=$("profGrid"); g.innerHTML="";
       if(!me&&u.private&&!fl){ g.innerHTML='<div class="reelEmpty">🔒 This account is private<br>Follow to see their posts</div>'; return; }
