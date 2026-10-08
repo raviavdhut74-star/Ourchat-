@@ -4,7 +4,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache">
   <meta charset="UTF-8">
   <title>Jivlag</title>
-  <meta name="theme-color" content="#f6f4fa">
+  <meta name="theme-color" content="#fbf5ea">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon-192.png">
@@ -12,12 +12,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1791500298">
+  <link rel="stylesheet" href="style-p1.css?v=1">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></symbol>
     <symbol id="i-video" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></symbol>
     <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.7" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-clip" viewBox="0 0 24 24"><path d="M21.4 11.6l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></symbol>
     <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></symbol>
@@ -38,25 +39,7 @@
   <div id="home">
     <div class="header igHead">
       <div class="logoT">Jivlag</div>
-      <div class="hactions"><button id="topChats" class="ib"><svg class="ic"><use href="#i-send"/></svg></button><button id="menuBtn" class="ib"><svg class="ic"><use href="#i-more"/></svg></button></div>
-      <div id="menu" hidden>
-        <button id="notifBtn">📲 Push alerts</button>
-        <button id="heartBtn" style="display:none">❤️</button>
-        <button id="galMenu">🖼️ Gallery</button>
-        <button id="darkBtn">🌙 Dark mode</button>
-        <button id="deleteAllBtn">🗑️ Delete my messages</button>
-        <button id="clearAllBtn" style="display:none">x</button>
-        <button id="actMenu">🔔 Activity</button>
-        <button id="reqMenu">👥 Follow requests</button>
-        <button id="privBtn">🔒 Private account: Off</button>
-        <button id="cfMenu">💚 Close friends</button>
-        <button id="audBtn">📖 Story for: Everyone</button>
-        <button id="limMenu">🔕 Muted & restricted</button>
-        <button id="savedMenu">🔖 Saved</button>
-        <button id="histMenu">🕘 History</button>
-        <button id="blockMenu">🚫 Blocked accounts</button>
-        <button id="logoutBtn">🚪 Logout</button>
-      </div>
+      <div class="hactions"><button id="topChats" class="ib"><svg class="ic"><use href="#i-send"/></svg></button></div>
     </div>
     <div id="storyBar">
       <span id="snapBtn" hidden></span>
@@ -67,7 +50,24 @@
   </div>
   <div id="chats" hidden><div class="ctitle">Chats</div><input id="userSearch" class="uSearch" placeholder="🔍 Search users" autocomplete="off" autocapitalize="none"><div id="chatList"></div><div class="ctitle">Calls</div><div id="callLog"></div></div>
   <div id="prof" hidden>
-    <div class="header igHead"><button id="profBack" class="ib" hidden>←</button><div class="logoT" id="profUser"></div><span class="verTag">supabase p1</span></div>
+    <div class="header igHead"><button id="profBack" class="ib" hidden>←</button><div class="logoT" id="profUser"></div><span class="verTag">supabase p1</span><button id="menuBtn" class="ib"><svg class="ic"><use href="#i-menu"/></svg></button>      <div id="menu" hidden>
+      <button id="notifBtn">📲 Push alerts</button>
+      <button id="heartBtn" style="display:none">❤️</button>
+      <button id="galMenu">🖼️ Gallery</button>
+      <button id="darkBtn">🌙 Dark mode</button>
+      <button id="deleteAllBtn">🗑️ Delete my messages</button>
+      <button id="clearAllBtn" style="display:none">x</button>
+      <button id="actMenu">🔔 Activity</button>
+      <button id="reqMenu">👥 Follow requests</button>
+      <button id="privBtn">🔒 Private account: Off</button>
+      <button id="cfMenu">💚 Close friends</button>
+      <button id="audBtn">📖 Story for: Everyone</button>
+      <button id="limMenu">🔕 Muted & restricted</button>
+      <button id="savedMenu">🔖 Saved</button>
+      <button id="histMenu">🕘 History</button>
+      <button id="blockMenu">🚫 Blocked accounts</button>
+      <button id="logoutBtn">🚪 Logout</button>
+    </div></div>
     <div class="pTop"><div class="bigAv" id="profAv"></div>
       <div class="pStats"><div><b id="stPosts">0</b>Posts</div><div><b id="stFollowers">0</b>Followers</div><div><b id="stFollowing">0</b>Following</div></div></div>
     <div class="pInfo"><b id="profNameShow"></b><div id="profBioShow"></div></div>
