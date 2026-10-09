@@ -47,6 +47,7 @@
       $("loginBox").hidden=true;
       if(started&&myUid===user.id) return;
       myUid=user.id;
+      sb.from("profiles").update({deactivated:false}).eq("id",user.id).then(()=>{},()=>{});
       const md=user.user_metadata||{};
       myName=md.name||regName||localStorage.getItem("ourchat_name")||(user.email||"Me").split("@")[0];
       localStorage.setItem("ourchat_name",myName);
@@ -1465,7 +1466,7 @@
 
     /* ================= USERS / CHAT LIST / NAV ================= */
     function listenUsers(){
-      live("profiles",async()=>{ const {data}=await sb.from("profiles").select("*"); return data||[]; },rows=>{ usersMap={}; rows.forEach(r=>{ usersMap[r.id]=mapUser(r); }); drawChats(); updateMenuLabels(); if(!$("prof").hidden) drawProf(); });
+      live("profiles",async()=>{ const {data}=await sb.from("profiles").select("*"); return data||[]; },rows=>{ usersMap={}; rows.forEach(r=>{ if(r.deactivated&&r.id!==myUid) return; usersMap[r.id]=mapUser(r); }); drawChats(); updateMenuLabels(); if(!$("prof").hidden) drawProf(); });
     }
     function setAv(el,u){ u=u||{}; el.style.backgroundImage=u.photo?"url('"+u.photo+"')":""; el.style.backgroundSize="cover"; el.textContent=u.photo?"":(u.name||"?").charAt(0).toUpperCase(); }
     function callBtn(txt,u,v){ const b=document.createElement("button"); b.textContent=txt; b.className="cBtn"; b.onclick=e=>{ e.stopPropagation(); if(!canChat(u.uid)){ toast("Follow this person first"); return; } openChat(u); startCall(v); }; return b; }
@@ -1630,3 +1631,6 @@
     function listenPosts(){}
 
     function listenMine(){}
+
+    /* ===== bridge used by neon.js (theme / account options) ===== */
+    window.JV={sb,toast,uid:()=>myUid,user:()=>usersMap[myUid]||null,posts:()=>(postRaw&&postRaw.length?postRaw:postList)||[],reels:()=>(typeof reelList!=="undefined"?reelList:[]),follows:()=>followsAll||[],prefs:()=>prefs};

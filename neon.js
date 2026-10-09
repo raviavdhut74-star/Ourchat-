@@ -80,7 +80,7 @@ sp+="</svg>";
 document.body.insertAdjacentHTML("afterbegin",sp);
 
 /* ---------- 2. Replace leftover emoji in UI (buttons, toasts, labels) with the icons ---------- */
-var MAP={"🗑":"trash","🔔":"bell","🔕":"bell-off","👥":"users","🔒":"lock","💚":"star-f","📖":"book","🔖":"bookmark","✅":"check-circle","🕘":"clock","🚫":"ban","🚪":"logout","📲":"push","🖼":"image","🌙":"moon","☀":"sun","📌":"pin","✏":"edit","📋":"copy","↩":"reply","➤":"forward","🎬":"reels","🎤":"mic","📷":"camera","📸":"camera","📵":"endcall","📞":"phone","🎥":"video","🔇":"volume-off","🔊":"volume","🔥":"flame","🤍":"heart","❤":"heart-f","💬":"comment","🚩":"flag","🤫":"eye-off","👤":"user","🔍":"search","📄":"file","🟢":"dot","➕":"plus","✕":"x","←":"back","⋯":"more","▦":"grid"};
+var MAP={"🗑":"trash","🔔":"bell","🔕":"bell-off","👥":"users","🔒":"lock","💚":"star-f","📖":"book","🔖":"bookmark","✅":"check-circle","🕘":"clock","🚫":"ban","🚪":"logout","📲":"push","🖼":"image","🌙":"moon","☀":"sun","📌":"pin","✏":"edit","📋":"copy","↩":"reply","➤":"forward","🎬":"reels","🎤":"mic","📷":"camera","📸":"camera","📵":"endcall","📞":"phone","🎥":"video","🔇":"volume-off","🔊":"volume","🔥":"flame","🤍":"heart","❤":"heart-f","💬":"comment","🚩":"flag","🤫":"eye-off","👤":"user","🔍":"search","📄":"file","🟢":"dot","➕":"plus","✕":"x","←":"back","⋯":"more","▦":"grid","🎨":"palette","⬇":"download"};
 var RE=new RegExp("("+Object.keys(MAP).join("|")+")\uFE0F?","gu");
 var OK="button,.reelEmpty,.hEmpty,#toast,#pinText,#replyText,#chatList,#callLog,#hubBody,#fRows,#sub,.callTop,.ctitle";
 function mk(name){
