@@ -51,7 +51,7 @@
       const md=user.user_metadata||{};
       myName=md.name||regName||localStorage.getItem("ourchat_name")||(user.email||"Me").split("@")[0];
       localStorage.setItem("ourchat_name",myName);
-      if(!started){ started=true; listenUsers(); listenFollows(); listenPresence(); listenBlocks(); listenSocial(); }
+      if(!started){ started=true; listenUsers(); listenFollows(); listenPresence(); listenBlocks(); listenSocial(); listenPosts(); }
     });
 
     const keyOf=v=>{ v=v.trim().toLowerCase(); return /^[\d+\s-]{7,}$/.test(v)?v.replace(/\D/g,""):v.replace(/^@/,""); };
@@ -1229,7 +1229,7 @@
           actBtn("➤",()=>shareToChat(p.kind==="video"?{type:"video",url:mp4(p.url),text:""}:{type:"image",url:p.url,text:""})),
           dlLink(p.url),saveBtn("post",p),rptBtn("post",p));
         if(p.uid===myUid){
-          const del=actBtn("🗑️",()=>{ if(confirm("Delete this?")) deleteDoc(doc(db,profTab==="reels"?"reels":"posts",p.id)).catch(e=>alert("Delete failed: "+e.code)); });
+          const del=actBtn("🗑️",()=>{ if(confirm("Delete this?")) (profTab==="reels"?deleteDoc(doc(db,"reels",p.id)):sb.from("posts").delete().eq("id",p.id).then(({error})=>{ if(error) throw error; })).catch(e=>alert("Delete failed: "+(e.message||e.code))); });
           del.style.marginLeft="auto"; act.appendChild(del);
         }
         c.append(h,m,act);
@@ -1303,7 +1303,8 @@
       $("postsBtn").style.opacity=.4;
       try{
         const url=await cloudUpload(f);
-        await addDoc(collection(db,"posts"),{url,kind:isV?"video":"image",caption:cap.slice(0,200),tags:tagsOf(cap.slice(0,200)),name:myName,uid:myUid,createdAt:serverTimestamp()});
+        const {error}=await sb.from("posts").insert({url,kind:isV?"video":"image",caption:cap.slice(0,200),tags:tagsOf(cap.slice(0,200)),name:myName,uid:myUid});
+        if(error) throw error;
         toast("Post added ✅");
       }catch(err){ alert("Post failed: "+(err.message||err)); }
       $("postsBtn").style.opacity=1;
@@ -1524,7 +1525,7 @@
         const c=document.createElement("div"); c.className="gCell";
         if(p.kind==="video"||profTab==="reels"){ const v=document.createElement("video"); v.src=mp4(p.url); v.muted=true; v.preload="metadata"; v.playsInline=true; c.append(v); c.onclick=()=>{ if(profTab==="reels") $("reelsBtn").click(); else showTab("home"); }; }
         else{ const im=document.createElement("img"); im.src=p.url; im.loading="lazy"; c.append(im); c.onclick=()=>showViewer(p.url,p.caption||"",0,null); }
-        if(me){ const x=document.createElement("button"); x.className="gDel"; x.textContent="🗑"; x.onclick=ev=>{ ev.stopPropagation(); if(confirm("Delete this post?")) deleteDoc(doc(db,"posts",p.id)).catch(er=>alert("Failed: "+er.code)); }; c.append(x); }
+        if(me){ const x=document.createElement("button"); x.className="gDel"; x.textContent="🗑"; x.onclick=ev=>{ ev.stopPropagation(); if(confirm("Delete this post?")) sb.from("posts").delete().eq("id",p.id).then(({error})=>{ if(error) throw error; }).catch(er=>alert("Failed: "+(er.message||er.code))); }; c.append(x); }
         g.appendChild(c);
       });
     }
@@ -1628,7 +1629,12 @@
 
     function listenReels(){}
 
-    function listenPosts(){}
+    function listenPosts(){
+      live("posts",async()=>{ const {data,error}=await sb.from("posts").select("*").order("created_at",{ascending:false}).limit(30); if(error) throw error; return data||[]; },rows=>{
+        postRaw=rows.map(r=>({...r,createdAt:tsObj(r.created_at)}));
+        postList=postRaw.filter(canSee); drawPosts();
+      });
+    }
 
     function listenMine(){}
 
