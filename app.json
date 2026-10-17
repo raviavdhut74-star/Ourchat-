@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "क्षण",
+    "slug": "kshan",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "kshan",
+    "splash": { "image": "./assets/splash.png", "resizeMode": "contain", "backgroundColor": "#f4f1ff" },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.kshan.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "क्षण फोटो, व्हिडिओ आणि व्हिडिओ कॉलसाठी कॅमेरा वापरतो / Kshan uses the camera for photos, videos and video calls",
+        "NSMicrophoneUsageDescription": "क्षण व्हॉइस संदेश आणि कॉलसाठी माईक वापरतो / Kshan uses the microphone for voice messages and calls",
+        "NSPhotoLibraryUsageDescription": "क्षण पोस्ट आणि स्टोरीसाठी फोटो निवडतो / Kshan picks photos for posts and stories"
+      }
+    },
+    "android": {
+      "package": "app.kshan.mobile",
+      "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#6f5bff" },
+      "permissions": ["CAMERA", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS", "ACCESS_NETWORK_STATE", "INTERNET"],
+      "usesCleartextTraffic": true
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-localization",
+      ["expo-image-picker", { "photosPermission": "क्षण पोस्ट आणि स्टोरीसाठी फोटो निवडतो" }],
+      ["expo-av", { "microphonePermission": "क्षण व्हॉइस संदेशांसाठी माईक वापरतो" }],
+      "@config-plugins/react-native-webrtc"
+    ],
+    "extra": {}
+  }
+}
